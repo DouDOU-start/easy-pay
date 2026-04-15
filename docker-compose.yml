@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: easypay-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: easypay
+      POSTGRES_PASSWORD: easypay
+      POSTGRES_DB: easypay
+    ports:
+      - "15432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U easypay"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: easypay-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  adminer:
+    image: adminer:latest
+    container_name: easypay-adminer
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    depends_on:
+      - postgres
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: easypay-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      EASYPAY_DATABASE_DSN: "host=postgres user=easypay password=easypay dbname=easypay port=5432 sslmode=disable TimeZone=Asia/Shanghai"
+      EASYPAY_REDIS_ADDR: "redis:6379"
+      EASYPAY_CRYPTO_KEY: "change-me-please-this-is-32bytes"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles: ["full"]
+
+volumes:
+  postgres_data:
+  redis_data:

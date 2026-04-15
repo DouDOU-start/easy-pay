@@ -1,0 +1,55 @@
+import { theme, type ThemeConfig } from 'antd'
+
+export const epTheme: ThemeConfig = {
+  algorithm: theme.darkAlgorithm,
+  token: {
+    colorPrimary: '#d9b870',
+    colorInfo: '#5da7f7',
+    colorSuccess: '#4ec9a0',
+    colorWarning: '#e8c26a',
+    colorError: '#e86060',
+    colorBgBase: '#0a0b0e',
+    colorBgContainer: '#111317',
+    colorBgElevated: '#161a1f',
+    colorBgLayout: '#0a0b0e',
+    colorBorder: '#1e2228',
+    colorBorderSecondary: '#1e2228',
+    colorText: '#f5f2ea',
+    colorTextSecondary: '#8b8d92',
+    colorTextTertiary: '#5a5d63',
+    colorTextQuaternary: '#4a4d53',
+    fontFamily: "'Manrope', -apple-system, 'Helvetica Neue', sans-serif",
+    fontFamilyCode: "'JetBrains Mono', 'SF Mono', Consolas, monospace",
+    borderRadius: 0,
+    borderRadiusLG: 0,
+    borderRadiusSM: 0,
+    controlHeight: 40,
+    fontSize: 13,
+  },
+  components: {
+    Layout: {
+      siderBg: '#111317',
+      headerBg: 'transparent',
+      bodyBg: 'transparent',
+    },
+    Menu: {
+      itemBg: 'transparent',
+      subMenuItemBg: 'transparent',
+      itemColor: '#8b8d92',
+      itemHoverBg: 'transparent',
+      itemHoverColor: '#f5f2ea',
+      itemSelectedBg: 'transparent',
+      itemSelectedColor: '#f5f2ea',
+      itemBorderRadius: 0,
+    },
+    Table: {
+      headerBg: 'transparent',
+      headerColor: '#5a5d63',
+      rowHoverBg: '#161a1f',
+      borderColor: '#1e2228',
+    },
+    Form: {
+      labelColor: '#8b8d92',
+    },
+  },
+}

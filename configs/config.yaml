@@ -1,0 +1,31 @@
+server:
+  addr: ":8080"
+  mode: debug   # debug | release
+  read_timeout: 15s
+  write_timeout: 15s
+
+database:
+  # port 15432 to avoid conflicting with any local postgres already bound to 5432
+  dsn: "host=localhost user=easypay password=easypay dbname=easypay port=15432 sslmode=disable TimeZone=Asia/Shanghai"
+  max_idle_conns: 10
+  max_open_conns: 100
+  log_level: info
+
+redis:
+  addr: "localhost:6379"
+  password: ""
+  db: 0
+
+crypto:
+  # 32 bytes for AES-256. Override via env EASYPAY_CRYPTO_KEY in production.
+  key: "change-me-please-this-is-32bytes"
+
+notify:
+  # downstream HTTP notify settings
+  timeout: 10s
+  max_retries: 8
+  backoff_seconds: [15, 60, 300, 900, 1800, 3600, 7200, 14400]
+
+log:
+  level: info   # debug | info | warn | error
+  format: json  # json | console
