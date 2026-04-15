@@ -151,7 +151,7 @@ X-Event-Type: payment.success
 ```json
 {
   "mch_id": "1900000000",
-  "app_id": "wx1234567890abcdef",
+  "app_id": "wxXXXXXXXXXXXXXXXX",
   "api_v3_key": "your-32-byte-api-v3-key-here---",
   "serial_no": "YOUR_CERT_SERIAL_NUMBER",
   "private_key_pem": "-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----"

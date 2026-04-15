@@ -324,7 +324,7 @@ export default function ChannelConfigDrawer({ merchantId, merchantName, open, on
                     rules={[{ required: true, message: '必填' }]}
                     extra="绑定的公众号/小程序/开放平台 AppID，通常以 wx 开头"
                   >
-                    <Input placeholder="wx1234567890abcdef" />
+                    <Input placeholder="wx + 16 位字符" />
                   </Form.Item>
 
                   <Form.Item
