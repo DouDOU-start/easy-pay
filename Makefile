@@ -1,4 +1,4 @@
-.PHONY: dev run web web-deps build tidy test infra infra-down up down logs
+.PHONY: dev run web web-deps web-build build tidy test infra infra-down up down logs
 
 # One-shot dev command: infra (docker) + Go API + React UI, all in this terminal.
 # Output is prefixed with [api] / [web] so you can tell them apart.
@@ -12,7 +12,11 @@ dev: infra web-deps
 	@echo "Press Ctrl+C to stop everything."
 	@echo ""
 	@trap 'kill 0' INT TERM; \
-		( go run ./cmd/api --config configs/config.yaml 2>&1 | sed -u 's/^/[api] /' ) & \
+		( while true; do \
+			go run ./cmd/api --config configs/config.yaml 2>&1 | sed -u 's/^/[api] /'; \
+			echo "[api] exited, restarting in 1s..."; \
+			sleep 1; \
+		done ) & \
 		( cd web/admin && npm run dev 2>&1 | sed -u 's/^/[web] /' ) & \
 		wait
 
@@ -48,7 +52,14 @@ down:
 logs:
 	docker compose logs -f api
 
-build:
+# Build the frontend bundle into web/admin/dist for go:embed to pick up.
+web-build: web-deps
+	cd web/admin && npm run build
+
+# Single-binary production build: bundles the admin SPA into the Go binary
+# via go:embed. After `make build`, running `./bin/easypay` serves both the
+# API and the admin UI on one port — no separate Vite process needed.
+build: web-build
 	CGO_ENABLED=0 go build -o bin/easypay ./cmd/api
 
 tidy:

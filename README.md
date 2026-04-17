@@ -35,7 +35,8 @@ easy-pay/
 │   │   └── middleware/       # 商户签名鉴权
 │   ├── pkg/{crypto,sign,idgen}
 │   └── server/               # Router 装配
-├── migrations/               # 初始化 SQL
+├── migrations/               # 启动时自动执行的初始化 / 迁移 SQL
+├── sql/helpers/              # 本地调试手工执行的辅助 SQL
 ├── configs/config.yaml
 ├── web/admin/                # React + Vite + Ant Design 管理后台
 ├── docker-compose.yml
@@ -59,7 +60,23 @@ make up
 - API：`http://localhost:8080`
 - Adminer（DB 可视化）：`http://localhost:8081` （server=postgres user=easypay pass=easypay db=easypay）
 - 管理后台：`cd web/admin && npm install && npm run dev` → `http://localhost:5173`
-- 默认管理员：`admin / admin123`（通过环境变量 `EASYPAY_ADMIN_USER` / `EASYPAY_ADMIN_PASS` 覆盖）
+- 默认管理员：`admin / admin123`（初始化时直接写入数据库 `admin_users` 表）
+
+### SQL 目录约定
+
+- `migrations/` 仅放 PostgreSQL 首次启动时由 `docker-compose.yml` 自动加载的 SQL。
+- `sql/helpers/` 放本地联调、造数、测试回调用的手工 SQL，不会自动执行。
+- 当前可用 helper SQL：`sql/helpers/seed_admin.sql`、`sql/helpers/seed_notify_logs.sql`、`sql/helpers/point_to_test_sink.sql`
+
+手工执行示例：
+
+```bash
+psql "postgresql://easypay:easypay@localhost:15432/easypay?sslmode=disable" -f sql/helpers/seed_admin.sql
+psql "postgresql://easypay:easypay@localhost:15432/easypay?sslmode=disable" -f sql/helpers/seed_notify_logs.sql
+psql "postgresql://easypay:easypay@localhost:15432/easypay?sslmode=disable" -f sql/helpers/point_to_test_sink.sql
+```
+
+`seed_admin.sql` 会直接写入 `admin_users`，用于现有数据库初始化或重置管理员账号密码。
 
 ## 下游接入
 

@@ -1,10 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Table, Tag, Select, Input, Button, Modal, Form, InputNumber, message, Typography } from 'antd'
+import { Table, Tag, Select, Input, Button, Modal, Form, InputNumber, message, Typography, Tooltip } from 'antd'
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import { QRCodeSVG } from 'qrcode.react'
 import { api } from '../api'
 
 const { Text, Paragraph } = Typography
+
+function TimeCell({ value, accent }: { value?: string; accent?: boolean }) {
+  if (!value) return <span style={{ color: 'var(--text-faint)' }}>—</span>
+  const short = value.slice(0, 19).replace('T', ' ')
+  return (
+    <Tooltip title={value}>
+      <span
+        className="mono"
+        style={{ fontSize: 11, color: accent ? 'var(--accent-emerald)' : 'var(--text-secondary)', whiteSpace: 'nowrap' }}
+      >
+        {short}
+      </span>
+    </Tooltip>
+  )
+}
 
 const statusColor: Record<string, string> = {
   pending: 'orange',
@@ -57,11 +72,21 @@ export default function Orders() {
     setList(data.data.list)
     setTotal(data.data.total)
   }
+  const loadMerchants = async () => {
+    const { data } = await api.get('/admin/merchants', { params: { page: 1, size: 500 } })
+    setMerchants(data.data.list)
+  }
   useEffect(() => { load() }, [page, filter])
+  useEffect(() => { loadMerchants() }, [])
+
+  const merchantMap = useMemo(() => {
+    const m = new Map<number, Merchant>()
+    merchants.forEach((x) => m.set(x.id, x))
+    return m
+  }, [merchants])
 
   const openCreate = async () => {
-    const { data } = await api.get('/admin/merchants', { params: { page: 1, size: 100 } })
-    setMerchants(data.data.list)
+    if (merchants.length === 0) await loadMerchants()
     form.resetFields()
     form.setFieldsValue({
       channel: 'wechat',
@@ -103,17 +128,6 @@ export default function Orders() {
 
   return (
     <>
-      <div className="ep-page-header">
-        <div className="col-title">
-          <div className="eyebrow">交易 · 02</div>
-          <h1>订单<em>流水</em></h1>
-        </div>
-        <div className="col-actions">
-          <Button icon={<ReloadOutlined />} onClick={load}>刷新</Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建测试订单</Button>
-        </div>
-      </div>
-
       <div className="ep-stat-strip">
         <div className="ep-stat">
           <div className="label">订单总数</div>
@@ -162,16 +176,26 @@ export default function Orders() {
             { value: 'alipay', label: '支付宝' },
           ]}
         />
-        <Input
-          placeholder="商户 ID"
-          style={{ width: 150 }}
-          onChange={(e) => setFilter({ ...filter, merchant_id: e.target.value })}
+        <Select
+          placeholder="商户"
+          allowClear
+          showSearch
+          style={{ width: 220 }}
+          optionFilterProp="label"
+          value={filter.merchant_id ? Number(filter.merchant_id) : undefined}
+          onChange={(v) => setFilter({ ...filter, merchant_id: v ? String(v) : undefined })}
+          options={merchants.map((m) => ({ value: m.id, label: `${m.name} · ${m.mch_no}` }))}
         />
+        <div className="ep-filter-actions">
+          <Button icon={<ReloadOutlined />} onClick={load}>刷新</Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建测试订单</Button>
+        </div>
       </div>
 
       <Table
         rowKey="id"
         dataSource={list}
+        sticky
         pagination={{
           current: page,
           pageSize: size,
@@ -179,7 +203,7 @@ export default function Orders() {
           onChange: setPage,
           showTotal: (t) => `共 ${t} 条`,
         }}
-        scroll={{ x: 1300 }}
+        scroll={{ x: 'max-content', y: '100%' }}
         columns={[
           {
             title: '平台单号',
@@ -196,8 +220,18 @@ export default function Orders() {
           {
             title: '商户',
             dataIndex: 'merchant_id',
-            width: 80,
-            render: (v: number) => <span className="mono">#{v}</span>,
+            width: 150,
+            ellipsis: true,
+            render: (v: number) => {
+              const m = merchantMap.get(v)
+              const name = m?.name || `#${v}`
+              const tip = m ? `${m.name} · ${m.mch_no}` : `#${v}`
+              return (
+                <Tooltip title={tip}>
+                  <span style={{ color: 'var(--text-primary)' }}>{name}</span>
+                </Tooltip>
+              )
+            },
           },
           {
             title: '渠道',
@@ -234,16 +268,14 @@ export default function Orders() {
           {
             title: '创建时间',
             dataIndex: 'created_at',
-            width: 180,
-            render: (v: string) => <span className="mono" style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{v}</span>,
+            width: 200,
+            render: (v: string) => <TimeCell value={v} />,
           },
           {
             title: '支付时间',
             dataIndex: 'paid_at',
-            width: 180,
-            render: (v: string) => v
-              ? <span className="mono" style={{ fontSize: 11, color: 'var(--accent-emerald)' }}>{v}</span>
-              : <span style={{ color: 'var(--text-faint)' }}>—</span>,
+            width: 200,
+            render: (v: string) => <TimeCell value={v} accent />,
           },
         ]}
       />

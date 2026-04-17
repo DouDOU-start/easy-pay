@@ -1,11 +1,14 @@
 package admin
 
 import (
+	cryptorand "crypto/rand"
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -24,17 +27,19 @@ import (
 )
 
 type Handler struct {
-	merchants  repository.MerchantRepo
-	orders     repository.OrderRepo
-	refunds    repository.RefundRepo
-	logs       repository.NotifyLogRepo
-	cipher     *crypto.AESGCM
-	registry   *registry.Registry
-	paymentSvc *payment.Service
+	merchants   repository.MerchantRepo
+	platformChs repository.PlatformChannelRepo
+	orders      repository.OrderRepo
+	refunds     repository.RefundRepo
+	logs        repository.NotifyLogRepo
+	cipher      *crypto.AESGCM
+	registry    *registry.Registry
+	paymentSvc  *payment.Service
 }
 
 func New(
 	merchants repository.MerchantRepo,
+	platformChs repository.PlatformChannelRepo,
 	orders repository.OrderRepo,
 	refunds repository.RefundRepo,
 	logs repository.NotifyLogRepo,
@@ -43,17 +48,22 @@ func New(
 	paymentSvc *payment.Service,
 ) *Handler {
 	return &Handler{
-		merchants: merchants, orders: orders, refunds: refunds,
-		logs: logs, cipher: cipher, registry: reg,
-		paymentSvc: paymentSvc,
+		merchants:   merchants,
+		platformChs: platformChs,
+		orders:      orders,
+		refunds:     refunds,
+		logs:        logs,
+		cipher:      cipher,
+		registry:    reg,
+		paymentSvc:  paymentSvc,
 	}
 }
 
 // ---------- Merchants ----------
 
 type createMerchantReq struct {
-	MchNo     string `json:"mch_no" binding:"required"`
 	Name      string `json:"name" binding:"required"`
+	Email     string `json:"email" binding:"required,email"`
 	NotifyURL string `json:"notify_url"`
 	Remark    string `json:"remark"`
 }
@@ -64,34 +74,95 @@ func (h *Handler) CreateMerchant(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "msg": err.Error()})
 		return
 	}
-	m := &model.Merchant{
-		MchNo:     req.MchNo,
-		Name:      req.Name,
-		AppID:     "ap_" + uuid.NewString()[:12],
-		AppSecret: uuid.NewString() + uuid.NewString(),
-		NotifyURL: req.NotifyURL,
-		Status:    1,
-		Remark:    req.Remark,
-	}
-	if err := h.merchants.Create(c.Request.Context(), m); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "CREATE_FAILED", "msg": err.Error()})
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+	if existing, err := h.merchants.GetByEmail(c.Request.Context(), email); err == nil && existing != nil {
+		c.JSON(http.StatusConflict, gin.H{"code": "EMAIL_TAKEN", "msg": "该邮箱已被其它商户使用"})
+		return
+	} else if err != nil && !errors.Is(err, repository.ErrNotFound) {
+		fail500(c, "CREATE_FAILED", "操作失败，请稍后重试", err)
 		return
 	}
-	// return app_secret only on creation; downstream must store it.
+	password, err := randomPassword(12)
+	if err != nil {
+		fail500(c, "CREATE_FAILED", "操作失败，请稍后重试", err)
+		return
+	}
+	pwHash, err := HashPassword(password)
+	if err != nil {
+		fail500(c, "CREATE_FAILED", "操作失败，请稍后重试", err)
+		return
+	}
+	now := time.Now()
+	m := &model.Merchant{
+		MchNo:             generateMchNo(),
+		Name:              req.Name,
+		Email:             email,
+		PasswordHash:      pwHash,
+		PasswordChangedAt: &now,
+		AppID:             "ap_" + uuid.NewString()[:12],
+		AppSecret:         uuid.NewString() + uuid.NewString(),
+		NotifyURL:         req.NotifyURL,
+		Status:            1,
+		Remark:            req.Remark,
+	}
+	if err := h.merchants.Create(c.Request.Context(), m); err != nil {
+		fail500(c, "CREATE_FAILED", "操作失败，请稍后重试", err)
+		return
+	}
+	// Return app_secret and the generated plaintext password only on creation.
 	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": gin.H{
 		"id":         m.ID,
 		"mch_no":     m.MchNo,
+		"name":       m.Name,
+		"email":      m.Email,
 		"app_id":     m.AppID,
 		"app_secret": m.AppSecret,
-		"name":       m.Name,
+		"password":   password,
 	}})
+}
+
+// randomPassword returns an n-character printable token without ambiguous
+// characters (0/O, 1/l/I). n must be >= 8.
+func randomPassword(n int) (string, error) {
+	const alphabet = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+	buf := make([]byte, n)
+	raw := make([]byte, n)
+	if _, err := cryptorand.Read(raw); err != nil {
+		return "", err
+	}
+	for i, b := range raw {
+		buf[i] = alphabet[int(b)%len(alphabet)]
+	}
+	return string(buf), nil
+}
+
+// generateMchNo produces a merchant number like "M" + 10-digit timestamp suffix
+// + 4 random digits, e.g. "M17131472853891".
+func generateMchNo() string {
+	ts := time.Now().UnixNano()
+	// Last 10 digits of nanosecond timestamp + 4 random digits.
+	rnd := make([]byte, 2)
+	_, _ = cryptorand.Read(rnd)
+	r := (uint16(rnd[0])<<8 | uint16(rnd[1])) % 10000
+	return fmt.Sprintf("M%010d%04d", ts%1e10, r)
 }
 
 func (h *Handler) ListMerchants(c *gin.Context) {
 	page, size := parsePage(c)
-	list, total, err := h.merchants.List(c.Request.Context(), (page-1)*size, size)
+	filter := repository.MerchantFilter{
+		Keyword: strings.TrimSpace(c.Query("keyword")),
+		Offset:  (page - 1) * size,
+		Limit:   size,
+	}
+	if s := c.Query("status"); s != "" {
+		if v, err := strconv.Atoi(s); err == nil {
+			st := int16(v)
+			filter.Status = &st
+		}
+	}
+	list, total, err := h.merchants.List(c.Request.Context(), filter)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "LIST_FAILED", "msg": err.Error()})
+		fail500(c, "LIST_FAILED", "查询失败，请稍后重试", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": gin.H{
@@ -129,65 +200,73 @@ func (h *Handler) UpdateMerchant(c *gin.Context) {
 		m.Status = *req.Status
 	}
 	if err := h.merchants.Update(c.Request.Context(), m); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "UPDATE_FAILED", "msg": err.Error()})
+		fail500(c, "UPDATE_FAILED", "更新失败，请稍后重试", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": m})
 }
 
-// ---------- Merchant channels ----------
-
-type upsertChannelReq struct {
-	Channel model.Channel   `json:"channel" binding:"required,oneof=wechat alipay"`
-	Config  json.RawMessage `json:"config" binding:"required"`
-	Status  int16           `json:"status"`
+// ResetMerchantPassword generates a new random password for a merchant and
+// returns the plaintext once. The merchant must use this to log in and can
+// change it afterwards.
+func (h *Handler) ResetMerchantPassword(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	m, err := h.merchants.GetByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND"})
+		return
+	}
+	password, err := randomPassword(12)
+	if err != nil {
+		fail500(c, "RESET_FAILED", "操作失败，请稍后重试", err)
+		return
+	}
+	pwHash, err := HashPassword(password)
+	if err != nil {
+		fail500(c, "RESET_FAILED", "操作失败，请稍后重试", err)
+		return
+	}
+	now := time.Now()
+	m.PasswordHash = pwHash
+	m.PasswordChangedAt = &now
+	if err := h.merchants.Update(c.Request.Context(), m); err != nil {
+		fail500(c, "RESET_FAILED", "操作失败，请稍后重试", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": gin.H{
+		"email":    m.Email,
+		"password": password,
+	}})
 }
 
-// channelKeepSentinel is what the admin UI sends back for sensitive fields
-// (api_v3_key, private keys, ...) that the user did not re-enter during an
-// edit. The upsert handler swaps these for the currently-stored value before
-// re-encrypting, so secrets never have to leave the server.
-const channelKeepSentinel = "__KEEP__"
+// ---------- Merchant channel authorisation ----------
+// No credentials are managed here — only which channels the merchant may use.
 
-// channelSecretFields lists, per channel, the config keys whose values are
-// masked when read back by the admin UI and must be merged from the existing
-// row when a sentinel comes in on save.
-var channelSecretFields = map[model.Channel][]string{
-	model.ChannelWechat: {"api_v3_key", "private_key_pem", "public_key_pem"},
-	model.ChannelAlipay: {"private_key", "alipay_public_key"},
+type upsertMerchantChannelReq struct {
+	Status int16 `json:"status"`
 }
 
 func (h *Handler) UpsertMerchantChannel(c *gin.Context) {
 	merchantID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	var req upsertChannelReq
+	ch := model.Channel(c.Param("channel"))
+	if ch != model.ChannelWechat && ch != model.ChannelAlipay {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_CHANNEL"})
+		return
+	}
+	var req upsertMerchantChannelReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "msg": err.Error()})
 		return
 	}
-	merged, err := h.mergeKeptSecrets(c, merchantID, req.Channel, req.Config)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "MERGE_FAILED", "msg": err.Error()})
-		return
-	}
-	enc, err := h.cipher.Encrypt(merged)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "ENCRYPT_FAILED", "msg": err.Error()})
-		return
-	}
 	mc := &model.MerchantChannel{
 		MerchantID: merchantID,
-		Channel:    req.Channel,
-		Config:     enc,
-		Status:     1,
+		Channel:    ch,
+		Status:     req.Status,
 	}
-	if req.Status != 0 {
-		mc.Status = req.Status
-	}
-	if err := h.merchants.UpsertChannelConfig(c.Request.Context(), mc); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "SAVE_FAILED", "msg": err.Error()})
+	if err := h.merchants.UpsertMerchantChannel(c.Request.Context(), mc); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "SAVE_FAILED", "msg": "保存渠道授权失败，请稍后重试"})
 		return
 	}
-	h.registry.Invalidate(merchantID, req.Channel)
 	c.JSON(http.StatusOK, gin.H{"code": "OK"})
 }
 
@@ -195,75 +274,124 @@ func (h *Handler) ListMerchantChannels(c *gin.Context) {
 	merchantID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	list, err := h.merchants.ListChannels(c.Request.Context(), merchantID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "LIST_FAILED", "msg": err.Error()})
+		fail500(c, "LIST_FAILED", "查询失败，请稍后重试", err)
 		return
 	}
-	// Config is intentionally omitted from the JSON — secrets stay out of
-	// the admin list response. Fetch a single channel explicitly to decrypt.
 	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": list})
 }
 
-// GetMerchantChannel returns a single channel's config for the edit drawer.
-// Non-sensitive fields (mch_id, app_id, serial_no, ...) are returned as-is;
-// secret fields are replaced with the KEEP sentinel so the form can show
-// "already configured" without shipping the plaintext over the wire.
-func (h *Handler) GetMerchantChannel(c *gin.Context) {
-	merchantID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	channel := model.Channel(c.Param("channel"))
-	if _, ok := channelSecretFields[channel]; !ok {
+// ---------- Platform channel credentials ----------
+// These are the system-level credentials shared by all merchants.
+
+// channelKeepSentinel is what the admin UI sends back for sensitive fields
+// that the user did not re-enter during an edit. The upsert handler swaps
+// these for the currently-stored value before re-encrypting so secrets never
+// have to leave the server.
+const channelKeepSentinel = "__KEEP__"
+
+// channelSecretFields lists the config keys to mask on read and merge on write.
+var channelSecretFields = map[model.Channel][]string{
+	model.ChannelWechat: {"api_v3_key", "private_key_pem", "public_key_pem"},
+	model.ChannelAlipay: {"private_key", "alipay_public_key"},
+}
+
+type upsertPlatformChannelReq struct {
+	Config json.RawMessage `json:"config" binding:"required"`
+	Status int16           `json:"status"`
+}
+
+func (h *Handler) UpsertPlatformChannel(c *gin.Context) {
+	ch := model.Channel(c.Param("channel"))
+	if _, ok := channelSecretFields[ch]; !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_CHANNEL"})
 		return
 	}
-	list, err := h.merchants.ListChannels(c.Request.Context(), merchantID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "LOAD_FAILED", "msg": err.Error()})
+	var req upsertPlatformChannelReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "msg": err.Error()})
 		return
 	}
-	var found *model.MerchantChannel
-	for _, mc := range list {
-		if mc.Channel == channel {
-			found = mc
-			break
-		}
+	merged, err := h.mergePlatformSecrets(c, ch, req.Config)
+	if err != nil {
+		fail500(c, "MERGE_FAILED", "配置合并失败，请稍后重试", err)
+		return
 	}
-	if found == nil {
+	enc, err := h.cipher.Encrypt(merged)
+	if err != nil {
+		fail500(c, "ENCRYPT_FAILED", "配置加密失败，请稍后重试", err)
+		return
+	}
+	status := int16(1)
+	if req.Status != 0 {
+		status = req.Status
+	}
+	pc := &model.PlatformChannel{
+		Channel: ch,
+		Config:  enc,
+		Status:  status,
+	}
+	if err := h.platformChs.Upsert(c.Request.Context(), pc); err != nil {
+		fail500(c, "SAVE_FAILED", "保存失败，请稍后重试", err)
+		return
+	}
+	h.registry.Invalidate(ch)
+	c.JSON(http.StatusOK, gin.H{"code": "OK"})
+}
+
+func (h *Handler) GetPlatformChannel(c *gin.Context) {
+	ch := model.Channel(c.Param("channel"))
+	if _, ok := channelSecretFields[ch]; !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_CHANNEL"})
+		return
+	}
+	pc, err := h.platformChs.Get(c.Request.Context(), ch)
+	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"code": "OK", "data": nil})
 		return
 	}
-	plain, err := h.cipher.Decrypt(found.Config)
+	plain, err := h.cipher.Decrypt(pc.Config)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "DECRYPT_FAILED", "msg": err.Error()})
+		fail500(c, "DECRYPT_FAILED", "配置解密失败，请稍后重试", err)
 		return
 	}
 	var cfg map[string]any
 	if err := json.Unmarshal(plain, &cfg); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "BAD_CONFIG", "msg": err.Error()})
+		fail500(c, "BAD_CONFIG", "配置格式错误，请稍后重试", err)
 		return
 	}
-	for _, k := range channelSecretFields[channel] {
+	for _, k := range channelSecretFields[ch] {
 		if v, ok := cfg[k]; ok && v != nil && v != "" {
 			cfg[k] = channelKeepSentinel
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": gin.H{
-		"channel":    found.Channel,
-		"status":     found.Status,
-		"updated_at": found.UpdatedAt,
+		"channel":    pc.Channel,
+		"status":     pc.Status,
+		"updated_at": pc.UpdatedAt,
 		"config":     cfg,
 	}})
 }
 
-// mergeKeptSecrets looks for KEEP-sentinel values in the incoming config and
-// swaps them for the currently-stored plaintext. If there is no existing row,
-// or none of the incoming values is a sentinel, the input is returned
-// unchanged.
-func (h *Handler) mergeKeptSecrets(c *gin.Context, merchantID int64, channel model.Channel, incoming json.RawMessage) (json.RawMessage, error) {
+func (h *Handler) ListPlatformChannels(c *gin.Context) {
+	list, err := h.platformChs.List(c.Request.Context())
+	if err != nil {
+		fail500(c, "LIST_FAILED", "查询失败，请稍后重试", err)
+		return
+	}
+	// Config is intentionally omitted — use GetPlatformChannel for the edit view.
+	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": list})
+}
+
+// mergePlatformSecrets replaces __KEEP__ sentinels in incoming config with the
+// values currently stored in platform_channels, so secrets don't need to be
+// re-submitted on every edit.
+func (h *Handler) mergePlatformSecrets(c *gin.Context, ch model.Channel, incoming json.RawMessage) (json.RawMessage, error) {
 	var cfg map[string]any
 	if err := json.Unmarshal(incoming, &cfg); err != nil {
 		return nil, err
 	}
 	needsMerge := false
-	for _, k := range channelSecretFields[channel] {
+	for _, k := range channelSecretFields[ch] {
 		if v, ok := cfg[k]; ok && v == channelKeepSentinel {
 			needsMerge = true
 			break
@@ -272,19 +400,9 @@ func (h *Handler) mergeKeptSecrets(c *gin.Context, merchantID int64, channel mod
 	if !needsMerge {
 		return incoming, nil
 	}
-	list, err := h.merchants.ListChannels(c.Request.Context(), merchantID)
+	existing, err := h.platformChs.Get(c.Request.Context(), ch)
 	if err != nil {
-		return nil, err
-	}
-	var existing *model.MerchantChannel
-	for _, mc := range list {
-		if mc.Channel == channel {
-			existing = mc
-			break
-		}
-	}
-	if existing == nil {
-		return nil, fmt.Errorf("cannot keep existing secrets: no prior config for channel %s", channel)
+		return nil, fmt.Errorf("cannot keep existing secrets: no prior config for channel %s", ch)
 	}
 	plain, err := h.cipher.Decrypt(existing.Config)
 	if err != nil {
@@ -294,7 +412,7 @@ func (h *Handler) mergeKeptSecrets(c *gin.Context, merchantID int64, channel mod
 	if err := json.Unmarshal(plain, &prev); err != nil {
 		return nil, err
 	}
-	for _, k := range channelSecretFields[channel] {
+	for _, k := range channelSecretFields[ch] {
 		if cfg[k] == channelKeepSentinel {
 			cfg[k] = prev[k]
 		}
@@ -327,7 +445,7 @@ func (h *Handler) ListOrders(c *gin.Context) {
 	}
 	list, total, err := h.orders.List(c.Request.Context(), filter)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "LIST_FAILED", "msg": err.Error()})
+		fail500(c, "LIST_FAILED", "查询失败，请稍后重试", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": gin.H{
@@ -341,10 +459,6 @@ type parseCertReq struct {
 	PEM string `json:"pem" binding:"required"`
 }
 
-// ParseWechatCert extracts the serial number out of an apiclient_cert.pem
-// contents. The browser has no built-in X.509 parser so the batch-import UI
-// round-trips the certificate through this endpoint to fill in serial_no
-// automatically.
 func (h *Handler) ParseWechatCert(c *gin.Context) {
 	var req parseCertReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -369,7 +483,7 @@ func (h *Handler) ParseWechatCert(c *gin.Context) {
 	}})
 }
 
-// ---------- Test order (admin-authored, bypasses merchant HMAC) ----------
+// ---------- Test order ----------
 
 type testCreateOrderReq struct {
 	MerchantID      int64           `json:"merchant_id" binding:"required"`
@@ -381,9 +495,6 @@ type testCreateOrderReq struct {
 	ExpireSeconds   int             `json:"expire_seconds"`
 }
 
-// TestCreateOrder is an admin-only convenience that calls the payment service
-// directly, skipping the downstream HMAC handshake. Only mounted under the
-// authenticated /admin router, so it cannot be abused by anonymous callers.
 func (h *Handler) TestCreateOrder(c *gin.Context) {
 	var req testCreateOrderReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -407,7 +518,7 @@ func (h *Handler) TestCreateOrder(c *gin.Context) {
 		ExpireSeconds:   req.ExpireSeconds,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "CREATE_FAILED", "msg": err.Error()})
+		fail500(c, "CREATE_FAILED", "操作失败，请稍后重试", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": gin.H{
@@ -421,17 +532,21 @@ func (h *Handler) TestCreateOrder(c *gin.Context) {
 // ---------- Notify logs ----------
 
 func (h *Handler) ListNotifyLogs(c *gin.Context) {
-	orderNo := c.Query("order_no")
-	if orderNo == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "msg": "order_no required"})
-		return
+	page, size := parsePage(c)
+	filter := repository.NotifyLogFilter{
+		OrderNo: strings.TrimSpace(c.Query("order_no")),
+		Status:  model.NotifyStatus(c.Query("status")),
+		Offset:  (page - 1) * size,
+		Limit:   size,
 	}
-	list, err := h.logs.ListByOrder(c.Request.Context(), orderNo)
+	list, total, err := h.logs.List(c.Request.Context(), filter)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "LIST_FAILED", "msg": err.Error()})
+		fail500(c, "LIST_FAILED", "查询失败，请稍后重试", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": list})
+	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": gin.H{
+		"list": list, "total": total, "page": page, "size": size,
+	}})
 }
 
 func (h *Handler) RetryNotify(c *gin.Context) {
@@ -444,8 +559,15 @@ func (h *Handler) RetryNotify(c *gin.Context) {
 	now := time.Now()
 	n.Status = model.NotifyPending
 	n.NextRetryAt = &now
+	// Reset the attempt counter + error so the full backoff schedule runs
+	// again. Otherwise a dropped log (retry_count already at max) would only
+	// get one more shot before being re-dropped.
+	n.RetryCount = 0
+	n.LastError = ""
+	n.HTTPStatus = 0
+	n.ResponseBody = ""
 	if err := h.logs.Update(c.Request.Context(), n); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "UPDATE_FAILED", "msg": err.Error()})
+		fail500(c, "UPDATE_FAILED", "更新失败，请稍后重试", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": "OK"})
@@ -469,4 +591,11 @@ func parsePage(c *gin.Context) (int, int) {
 func HashPassword(pw string) (string, error) {
 	h, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost)
 	return string(h), err
+}
+
+// fail500 logs the real error server-side and returns a generic message to the
+// client so internal details (SQL errors, stack traces, etc.) never leak.
+func fail500(c *gin.Context, code string, msg string, err error) {
+	log.Printf("[admin] %s: %v", code, err)
+	c.JSON(http.StatusInternalServerError, gin.H{"code": code, "msg": msg})
 }

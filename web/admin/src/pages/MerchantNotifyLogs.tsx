@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Table, Tag, Input, Button, Select, message, Tooltip } from 'antd'
-import { SearchOutlined, RedoOutlined } from '@ant-design/icons'
-import { api } from '../api'
+import { Button, Input, Select, Table, Tag, Tooltip } from 'antd'
+import { RedoOutlined, SearchOutlined } from '@ant-design/icons'
+import { merchantApi } from '../api'
 
 const statusColor: Record<string, string> = {
   pending: 'orange',
@@ -17,7 +17,7 @@ const statusLabel: Record<string, string> = {
   dropped: '已丢弃',
 }
 
-export default function NotifyLogs() {
+export default function MerchantNotifyLogs() {
   const [orderNo, setOrderNo] = useState('')
   const [status, setStatus] = useState<string | undefined>(undefined)
   const [page, setPage] = useState(1)
@@ -29,7 +29,7 @@ export default function NotifyLogs() {
     const params: Record<string, any> = { page, size }
     if (orderNo.trim()) params.order_no = orderNo.trim()
     if (status) params.status = status
-    const { data } = await api.get('/admin/notify_logs', { params })
+    const { data } = await merchantApi.get('/merchant/notify_logs', { params })
     setList(data.data.list ?? [])
     setTotal(data.data.total ?? 0)
   }
@@ -47,14 +47,16 @@ export default function NotifyLogs() {
     if (page !== 1) setPage(1)
   }
 
-  const retry = async (id: number) => {
-    await api.post(`/admin/notify_logs/${id}/retry`)
-    message.success('已标记重试')
-    load()
-  }
-
   return (
     <>
+      <div className="ep-page-header">
+        <div className="col-title">
+          <div className="eyebrow">Notify</div>
+          <h1>只看当前商户自己的<em>回调记录</em>。</h1>
+          <div className="subtitle">按平台订单号和投递状态过滤，方便核对下游通知是否成功送达。</div>
+        </div>
+      </div>
+
       <div className="ep-filter-bar">
         <span className="ep-filter-label">筛选</span>
         <Input
@@ -112,7 +114,7 @@ export default function NotifyLogs() {
             title: '回调地址',
             dataIndex: 'notify_url',
             ellipsis: true,
-            width: 280,
+            width: 300,
             render: (v: string) => <span className="tracked-id">{v}</span>,
           },
           {
@@ -124,7 +126,7 @@ export default function NotifyLogs() {
           {
             title: '重试',
             dataIndex: 'retry_count',
-            width: 80,
+            width: 90,
             render: (v: number) => <span className="mono">{v} 次</span>,
           },
           {
@@ -132,9 +134,7 @@ export default function NotifyLogs() {
             dataIndex: 'http_status',
             width: 80,
             render: (v: number) => v
-              ? <span className="mono" style={{
-                  color: v >= 200 && v < 300 ? 'var(--accent-emerald)' : 'var(--accent-crimson)',
-                }}>{v}</span>
+              ? <span className="mono" style={{ color: v >= 200 && v < 300 ? 'var(--accent-emerald)' : 'var(--accent-crimson)' }}>{v}</span>
               : <span style={{ color: 'var(--text-faint)' }}>—</span>,
           },
           {
@@ -142,7 +142,7 @@ export default function NotifyLogs() {
             dataIndex: 'next_retry_at',
             width: 200,
             render: (v: string) => v
-              ? <span className="mono" style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{v?.slice(0, 19).replace('T', ' ')}</span>
+              ? <span className="mono" style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{v.slice(0, 19).replace('T', ' ')}</span>
               : <span style={{ color: 'var(--text-faint)' }}>—</span>,
           },
           {
@@ -163,17 +163,13 @@ export default function NotifyLogs() {
             title: '创建时间',
             dataIndex: 'created_at',
             width: 200,
-            render: (v: string) => <span className="mono" style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{v?.slice(0, 19).replace('T', ' ')}</span>,
+            render: (v: string) => <span className="mono" style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{v.slice(0, 19).replace('T', ' ')}</span>,
           },
           {
-            title: '操作',
-            width: 100,
+            title: '说明',
+            width: 120,
             fixed: 'right',
-            render: (_, row) => (
-              row.status !== 'success'
-                ? <Button size="small" icon={<RedoOutlined />} onClick={() => retry(row.id)}>重推</Button>
-                : null
-            ),
+            render: (_, row) => row.status !== 'success' ? <span style={{ color: 'var(--text-secondary)' }}><RedoOutlined /> 待平台继续重试</span> : <span style={{ color: 'var(--accent-emerald)' }}>已投递</span>,
           },
         ]}
       />

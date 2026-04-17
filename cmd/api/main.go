@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"log"
 	"net/http"
@@ -22,11 +23,16 @@ import (
 	"github.com/easypay/easy-pay/internal/handler/admin"
 	"github.com/easypay/easy-pay/internal/handler/api"
 	"github.com/easypay/easy-pay/internal/handler/callback"
+	"github.com/easypay/easy-pay/internal/handler/merchant"
+	testsinkh "github.com/easypay/easy-pay/internal/handler/testsink"
 	"github.com/easypay/easy-pay/internal/pkg/crypto"
 	"github.com/easypay/easy-pay/internal/repository"
 	"github.com/easypay/easy-pay/internal/server"
 	"github.com/easypay/easy-pay/internal/service/notify"
 	"github.com/easypay/easy-pay/internal/service/payment"
+	"github.com/easypay/easy-pay/internal/setup"
+	"github.com/easypay/easy-pay/internal/testsink"
+	webadmin "github.com/easypay/easy-pay/web/admin"
 )
 
 func main() {
@@ -35,15 +41,66 @@ func main() {
 
 	cfg, err := config.Load(*cfgPath)
 	if err != nil {
+		if errors.Is(err, config.ErrConfigNotFound) {
+			runSetupMode(*cfgPath)
+			return
+		}
 		log.Fatalf("load config: %v", err)
 	}
 
+	runNormalMode(cfg)
+}
+
+// runSetupMode starts a minimal server that only serves the setup wizard.
+func runSetupMode(cfgPath string) {
+	log.Println("配置文件未找到，进入初始化向导模式...")
+
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.New()
+	r.Use(gin.Recovery(), gin.Logger())
+
+	setupH := setup.New(cfgPath)
+
+	sg := r.Group("/setup")
+	{
+		sg.GET("/status", setupH.Status)
+		sg.POST("/test-db", setupH.TestDB)
+		sg.POST("/test-redis", setupH.TestRedis)
+		sg.POST("/install", setupH.Install)
+	}
+
+	// Serve the embedded admin SPA so the wizard UI works.
+	staticFS, err := webadmin.Dist()
+	if err == nil {
+		r.NoRoute(server.SpaHandler(staticFS))
+	}
+
+	addr := ":8080"
+	srv := &http.Server{Addr: addr, Handler: r}
+
+	go func() {
+		log.Printf("初始化向导已启动: http://localhost%s\n", addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %v", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = srv.Shutdown(ctx)
+}
+
+// runNormalMode starts the full application server.
+func runNormalMode(cfg *config.Config) {
 	logger, _ := zap.NewProduction()
 	defer logger.Sync()
 
 	// --- infra: db, redis, cipher ---
 	db, err := gorm.Open(postgres.Open(cfg.Database.DSN), &gorm.Config{
-		Logger: gormlogger.Default.LogMode(gormlogger.Info),
+		Logger: gormlogger.Default.LogMode(gormlogger.Warn),
 	})
 	if err != nil {
 		logger.Fatal("open db", zap.Error(err))
@@ -68,12 +125,13 @@ func main() {
 
 	// --- repositories ---
 	merchantRepo := repository.NewMerchantRepo(db)
+	platformChRepo := repository.NewPlatformChannelRepo(db)
 	orderRepo := repository.NewOrderRepo(db)
 	refundRepo := repository.NewRefundRepo(db)
 	notifyLogRepo := repository.NewNotifyLogRepo(db)
 
 	// --- services ---
-	reg := registry.New(merchantRepo, cipher)
+	reg := registry.New(platformChRepo, merchantRepo, cipher)
 
 	notifySvc := notify.New(
 		notifyLogRepo, merchantRepo,
@@ -86,27 +144,32 @@ func main() {
 	platformBase := getenvDefault("EASYPAY_PLATFORM_BASE", "http://localhost"+cfg.Server.Addr)
 	paymentSvc := payment.NewService(orderRepo, refundRepo, reg, notifySvc, platformBase, logger)
 
-	// --- seed default admin if empty ---
-	defaultUser := getenvDefault("EASYPAY_ADMIN_USER", "admin")
-	defaultPass := getenvDefault("EASYPAY_ADMIN_PASS", "admin123")
-	if err := admin.SeedAdmin(context.Background(), db, defaultUser, defaultPass); err != nil {
-		logger.Warn("seed admin failed", zap.Error(err))
-	}
-
 	// --- handlers ---
 	paymentH := api.NewPaymentHandler(paymentSvc)
 	callbackH := callback.New(paymentSvc, reg, logger)
-	adminH := admin.New(merchantRepo, orderRepo, refundRepo, notifyLogRepo, cipher, reg, paymentSvc)
+	adminH := admin.New(merchantRepo, platformChRepo, orderRepo, refundRepo, notifyLogRepo, cipher, reg, paymentSvc)
 	adminAuthH := admin.NewAuthHandler(db, rdb)
+	merchantH := merchant.New(merchantRepo, orderRepo, notifyLogRepo)
+	merchantAuthH := merchant.NewAuthHandler(merchantRepo, rdb)
+	sink := testsink.New(200)
+	testSinkH := testsinkh.New(sink)
 
 	// --- router / server ---
 	gin.SetMode(cfg.Server.Mode)
+	staticFS, err := webadmin.Dist()
+	if err != nil {
+		logger.Warn("embed admin dist", zap.Error(err))
+	}
 	r := server.NewRouter(server.Deps{
 		MerchantRepo: merchantRepo,
 		Payment:      paymentH,
 		Callback:     callbackH,
 		Admin:        adminH,
 		AdminAuth:    adminAuthH,
+		Merchant:     merchantH,
+		MerchantAuth: merchantAuthH,
+		TestSink:     testSinkH,
+		StaticFS:     staticFS,
 	})
 
 	srv := &http.Server{

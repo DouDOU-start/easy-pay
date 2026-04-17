@@ -1,13 +1,13 @@
 import { Form, Input, Button, message } from 'antd'
 import { useNavigate } from 'react-router-dom'
-import { api } from '../api'
+import { ADMIN_TOKEN_KEY, api } from '../api'
 
 export default function Login() {
   const nav = useNavigate()
   const onFinish = async (v: { username: string; password: string }) => {
     try {
       const { data } = await api.post('/admin/login', v)
-      localStorage.setItem('easypay_token', data.data.token)
+      localStorage.setItem(ADMIN_TOKEN_KEY, data.data.token)
       message.success('登录成功')
       nav('/merchants')
     } catch (e: any) {
@@ -65,11 +65,10 @@ export default function Login() {
           <Form
             layout="vertical"
             onFinish={onFinish}
-            initialValues={{ username: 'admin', password: 'admin123' }}
             requiredMark={false}
           >
-            <Form.Item name="username" label="账号" rules={[{ required: true, message: '请输入账号' }]}>
-              <Input placeholder="admin" autoComplete="username" />
+            <Form.Item name="username" label="邮箱" rules={[{ required: true, message: '请输入邮箱' }]}>
+              <Input placeholder="admin@example.com" autoComplete="username" />
             </Form.Item>
             <Form.Item name="password" label="密码" rules={[{ required: true, message: '请输入密码' }]}>
               <Input.Password placeholder="••••••••" autoComplete="current-password" />

@@ -1,6 +1,15 @@
 import { Layout as AntLayout, Menu } from 'antd'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { ShopOutlined, FileTextOutlined, BellOutlined, LogoutOutlined } from '@ant-design/icons'
+import {
+  ShopOutlined,
+  FileTextOutlined,
+  BellOutlined,
+  LogoutOutlined,
+  ApiOutlined,
+  ExperimentOutlined,
+  MenuOutlined,
+  CloseOutlined,
+} from '@ant-design/icons'
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 
@@ -10,6 +19,8 @@ const pageTitles: Record<string, { crumb: string; section: string }> = {
   '/merchants': { crumb: '商户管理', section: '商户' },
   '/orders': { crumb: '订单中心', section: '交易' },
   '/notify-logs': { crumb: '通知日志', section: '监控' },
+  '/platform': { crumb: '渠道凭证', section: '平台' },
+  '/test-notify': { crumb: '测试回调', section: '开发' },
 }
 
 function formatNow() {
@@ -22,11 +33,21 @@ export default function Layout() {
   const nav = useNavigate()
   const loc = useLocation()
   const [now, setNow] = useState<string>(() => formatNow())
+  const [navOpen, setNavOpen] = useState(false)
 
   useEffect(() => {
     const id = setInterval(() => setNow(formatNow()), 1000)
     return () => clearInterval(id)
   }, [])
+
+  useEffect(() => {
+    setNavOpen(false)
+  }, [loc.pathname])
+
+  useEffect(() => {
+    document.body.classList.toggle('ep-nav-locked', navOpen)
+    return () => document.body.classList.remove('ep-nav-locked')
+  }, [navOpen])
 
   const logout = async () => {
     try { await api.post('/admin/logout') } catch {}
@@ -38,12 +59,20 @@ export default function Layout() {
     { key: '/merchants', icon: <ShopOutlined />, label: '商户管理' },
     { key: '/orders', icon: <FileTextOutlined />, label: '订单中心' },
     { key: '/notify-logs', icon: <BellOutlined />, label: '通知日志' },
+    { key: '/platform', icon: <ApiOutlined />, label: '渠道凭证' },
+    { key: '/test-notify', icon: <ExperimentOutlined />, label: '测试回调' },
   ]
 
   const current = pageTitles[loc.pathname] ?? { crumb: '概览', section: '控制台' }
 
   return (
-    <AntLayout style={{ minHeight: '100vh', background: 'transparent' }}>
+    <AntLayout className={`ep-shell${navOpen ? ' ep-shell--nav-open' : ''}`} style={{ minHeight: '100vh', background: 'transparent' }}>
+      <div
+        className="ep-nav-backdrop"
+        aria-hidden={!navOpen}
+        onClick={() => setNavOpen(false)}
+      />
+
       <Sider className="ep-sider" width={260}>
         <div className="ep-brand">
           <div className="ep-brand-mark">ep</div>
@@ -51,6 +80,14 @@ export default function Layout() {
             <span className="wordmark">易支付</span>
             <span className="caption">支付管理平台 · v0.1</span>
           </div>
+          <button
+            type="button"
+            className="ep-sider-close"
+            aria-label="关闭菜单"
+            onClick={() => setNavOpen(false)}
+          >
+            <CloseOutlined />
+          </button>
         </div>
 
         <div className="ep-section-label">导航</div>
@@ -71,10 +108,19 @@ export default function Layout() {
 
       <AntLayout style={{ background: 'transparent' }}>
         <div className="ep-header">
+          <button
+            type="button"
+            className="ep-nav-trigger"
+            aria-label="打开菜单"
+            aria-expanded={navOpen}
+            onClick={() => setNavOpen(true)}
+          >
+            <MenuOutlined />
+          </button>
           <div className="ep-breadcrumb">
-            <span>易支付</span>
+            <span className="crumb-root">易支付</span>
             <span className="divider">/</span>
-            <span>{current.section}</span>
+            <span className="crumb-section">{current.section}</span>
             <span className="divider">/</span>
             <span className="current">{current.crumb}</span>
           </div>
@@ -84,7 +130,7 @@ export default function Layout() {
               <span>{now}</span>
             </div>
             <button className="ep-ghost-btn" onClick={logout}>
-              <LogoutOutlined /> 退出登录
+              <LogoutOutlined /> <span className="ep-ghost-btn-label">退出登录</span>
             </button>
           </div>
         </div>

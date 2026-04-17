@@ -1,11 +1,16 @@
 package config
 
 import (
+	"errors"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/spf13/viper"
 )
+
+// ErrConfigNotFound is returned by Load when no configuration file can be found.
+var ErrConfigNotFound = errors.New("config file not found")
 
 type Config struct {
 	Server   ServerConfig   `mapstructure:"server"`
@@ -67,6 +72,15 @@ func Load(path string) (*Config, error) {
 	v.AutomaticEnv()
 
 	if err := v.ReadInConfig(); err != nil {
+		var notFound viper.ConfigFileNotFoundError
+		if errors.As(err, &notFound) {
+			return nil, ErrConfigNotFound
+		}
+		// If a specific path was given and the file simply doesn't exist, also
+		// treat it as "not found" so the caller can enter setup mode.
+		if path != "" && os.IsNotExist(err) {
+			return nil, ErrConfigNotFound
+		}
 		return nil, err
 	}
 

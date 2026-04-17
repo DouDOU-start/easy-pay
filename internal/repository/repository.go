@@ -12,18 +12,76 @@ import (
 
 var ErrNotFound = errors.New("repository: not found")
 
+// ---------- PlatformChannel ----------
+
+// PlatformChannelRepo manages the platform-level credentials for each payment
+// provider. There is one row per channel; all merchants share these credentials.
+type PlatformChannelRepo interface {
+	Upsert(ctx context.Context, pc *model.PlatformChannel) error
+	Get(ctx context.Context, ch model.Channel) (*model.PlatformChannel, error)
+	List(ctx context.Context) ([]*model.PlatformChannel, error)
+}
+
+type platformChannelRepo struct{ db *gorm.DB }
+
+func NewPlatformChannelRepo(db *gorm.DB) PlatformChannelRepo {
+	return &platformChannelRepo{db: db}
+}
+
+func (r *platformChannelRepo) Upsert(ctx context.Context, pc *model.PlatformChannel) error {
+	var existing model.PlatformChannel
+	err := r.db.WithContext(ctx).Where("channel = ?", pc.Channel).First(&existing).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return r.db.WithContext(ctx).Create(pc).Error
+	}
+	if err != nil {
+		return err
+	}
+	existing.Config = pc.Config
+	existing.Status = pc.Status
+	existing.UpdatedAt = time.Now()
+	return r.db.WithContext(ctx).Save(&existing).Error
+}
+
+func (r *platformChannelRepo) Get(ctx context.Context, ch model.Channel) (*model.PlatformChannel, error) {
+	var pc model.PlatformChannel
+	err := r.db.WithContext(ctx).Where("channel = ? AND status = 1", ch).First(&pc).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotFound
+	}
+	return &pc, err
+}
+
+func (r *platformChannelRepo) List(ctx context.Context) ([]*model.PlatformChannel, error) {
+	var list []*model.PlatformChannel
+	err := r.db.WithContext(ctx).Order("channel ASC").Find(&list).Error
+	return list, err
+}
+
 // ---------- Merchant ----------
 
 type MerchantRepo interface {
 	Create(ctx context.Context, m *model.Merchant) error
 	GetByID(ctx context.Context, id int64) (*model.Merchant, error)
 	GetByAppID(ctx context.Context, appID string) (*model.Merchant, error)
-	List(ctx context.Context, offset, limit int) ([]*model.Merchant, int64, error)
+	GetByEmail(ctx context.Context, email string) (*model.Merchant, error)
+	List(ctx context.Context, f MerchantFilter) ([]*model.Merchant, int64, error)
 	Update(ctx context.Context, m *model.Merchant) error
 
-	UpsertChannelConfig(ctx context.Context, mc *model.MerchantChannel) error
-	GetChannelConfig(ctx context.Context, merchantID int64, ch model.Channel) (*model.MerchantChannel, error)
+	// Channel authorisation — no credentials stored here.
+	UpsertMerchantChannel(ctx context.Context, mc *model.MerchantChannel) error
+	GetMerchantChannel(ctx context.Context, merchantID int64, ch model.Channel) (*model.MerchantChannel, error)
 	ListChannels(ctx context.Context, merchantID int64) ([]*model.MerchantChannel, error)
+}
+
+// MerchantFilter drives the admin list endpoint. Keyword matches mch_no / name
+// / app_id case-insensitively; Status is a pointer so we can distinguish "any"
+// (nil) from the valid zero value 0 (disabled).
+type MerchantFilter struct {
+	Keyword string
+	Status  *int16
+	Offset  int
+	Limit   int
 }
 
 type merchantRepo struct{ db *gorm.DB }
@@ -52,14 +110,30 @@ func (r *merchantRepo) GetByAppID(ctx context.Context, appID string) (*model.Mer
 	return &m, err
 }
 
-func (r *merchantRepo) List(ctx context.Context, offset, limit int) ([]*model.Merchant, int64, error) {
-	var list []*model.Merchant
-	var total int64
+func (r *merchantRepo) GetByEmail(ctx context.Context, email string) (*model.Merchant, error) {
+	var m model.Merchant
+	err := r.db.WithContext(ctx).Where("email = ?", email).First(&m).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotFound
+	}
+	return &m, err
+}
+
+func (r *merchantRepo) List(ctx context.Context, f MerchantFilter) ([]*model.Merchant, int64, error) {
 	db := r.db.WithContext(ctx).Model(&model.Merchant{})
+	if f.Keyword != "" {
+		like := "%" + f.Keyword + "%"
+		db = db.Where("mch_no ILIKE ? OR name ILIKE ? OR app_id ILIKE ?", like, like, like)
+	}
+	if f.Status != nil {
+		db = db.Where("status = ?", *f.Status)
+	}
+	var total int64
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	if err := db.Order("id DESC").Offset(offset).Limit(limit).Find(&list).Error; err != nil {
+	var list []*model.Merchant
+	if err := db.Order("id DESC").Offset(f.Offset).Limit(f.Limit).Find(&list).Error; err != nil {
 		return nil, 0, err
 	}
 	return list, total, nil
@@ -69,7 +143,7 @@ func (r *merchantRepo) Update(ctx context.Context, m *model.Merchant) error {
 	return r.db.WithContext(ctx).Save(m).Error
 }
 
-func (r *merchantRepo) UpsertChannelConfig(ctx context.Context, mc *model.MerchantChannel) error {
+func (r *merchantRepo) UpsertMerchantChannel(ctx context.Context, mc *model.MerchantChannel) error {
 	var existing model.MerchantChannel
 	err := r.db.WithContext(ctx).
 		Where("merchant_id = ? AND channel = ?", mc.MerchantID, mc.Channel).
@@ -80,13 +154,12 @@ func (r *merchantRepo) UpsertChannelConfig(ctx context.Context, mc *model.Mercha
 	if err != nil {
 		return err
 	}
-	existing.Config = mc.Config
 	existing.Status = mc.Status
 	existing.UpdatedAt = time.Now()
 	return r.db.WithContext(ctx).Save(&existing).Error
 }
 
-func (r *merchantRepo) GetChannelConfig(ctx context.Context, merchantID int64, ch model.Channel) (*model.MerchantChannel, error) {
+func (r *merchantRepo) GetMerchantChannel(ctx context.Context, merchantID int64, ch model.Channel) (*model.MerchantChannel, error) {
 	var mc model.MerchantChannel
 	err := r.db.WithContext(ctx).
 		Where("merchant_id = ? AND channel = ? AND status = 1", merchantID, ch).
@@ -251,6 +324,19 @@ type NotifyLogRepo interface {
 	GetByID(ctx context.Context, id int64) (*model.NotifyLog, error)
 	ListPendingDue(ctx context.Context, now time.Time, limit int) ([]*model.NotifyLog, error)
 	ListByOrder(ctx context.Context, orderNo string) ([]*model.NotifyLog, error)
+	List(ctx context.Context, f NotifyLogFilter) ([]*model.NotifyLog, int64, error)
+}
+
+// NotifyLogFilter drives the admin list endpoint. OrderNo and Status are
+// optional; an empty filter returns every log in descending-id order.
+// MerchantID, when non-zero, restricts results to one merchant (used by the
+// self-service endpoint).
+type NotifyLogFilter struct {
+	MerchantID int64
+	OrderNo    string
+	Status     model.NotifyStatus
+	Offset     int
+	Limit      int
 }
 
 type notifyLogRepo struct{ db *gorm.DB }
@@ -283,4 +369,25 @@ func (r *notifyLogRepo) ListByOrder(ctx context.Context, orderNo string) ([]*mod
 	err := r.db.WithContext(ctx).Where("order_no = ?", orderNo).
 		Order("id DESC").Find(&list).Error
 	return list, err
+}
+func (r *notifyLogRepo) List(ctx context.Context, f NotifyLogFilter) ([]*model.NotifyLog, int64, error) {
+	db := r.db.WithContext(ctx).Model(&model.NotifyLog{})
+	if f.MerchantID > 0 {
+		db = db.Where("merchant_id = ?", f.MerchantID)
+	}
+	if f.OrderNo != "" {
+		db = db.Where("order_no = ?", f.OrderNo)
+	}
+	if f.Status != "" {
+		db = db.Where("status = ?", f.Status)
+	}
+	var total int64
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var list []*model.NotifyLog
+	if err := db.Order("id DESC").Offset(f.Offset).Limit(f.Limit).Find(&list).Error; err != nil {
+		return nil, 0, err
+	}
+	return list, total, nil
 }

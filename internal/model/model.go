@@ -47,25 +47,43 @@ const (
 )
 
 type Merchant struct {
-	ID        int64     `gorm:"primaryKey" json:"id"`
-	MchNo     string    `gorm:"column:mch_no;uniqueIndex;size:32" json:"mch_no"`
-	Name      string    `gorm:"size:128" json:"name"`
-	AppID     string    `gorm:"column:app_id;uniqueIndex;size:64" json:"app_id"`
-	AppSecret string    `gorm:"column:app_secret;size:128" json:"-"`
-	NotifyURL string    `gorm:"column:notify_url;size:512" json:"notify_url"`
-	Status    int16     `json:"status"`
-	Remark    string    `gorm:"size:256" json:"remark"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID                int64      `gorm:"primaryKey" json:"id"`
+	MchNo             string     `gorm:"column:mch_no;uniqueIndex;size:32" json:"mch_no"`
+	Name              string     `gorm:"size:128" json:"name"`
+	Email             string     `gorm:"size:128" json:"email"`
+	PasswordHash      string     `gorm:"column:password_hash;size:128" json:"-"`
+	PasswordChangedAt *time.Time `gorm:"column:password_changed_at" json:"password_changed_at"`
+	AppID             string     `gorm:"column:app_id;uniqueIndex;size:64" json:"app_id"`
+	AppSecret         string     `gorm:"column:app_secret;size:128" json:"-"`
+	NotifyURL         string     `gorm:"column:notify_url;size:512" json:"notify_url"`
+	Status            int16      `json:"status"`
+	Remark            string     `gorm:"size:256" json:"remark"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
 func (Merchant) TableName() string { return "merchants" }
 
+// PlatformChannel holds the platform-level credentials for a payment provider.
+// There is one row per channel (wechat, alipay). All downstream merchants share
+// these credentials; per-merchant authorisation is in MerchantChannel.
+type PlatformChannel struct {
+	ID        int64     `gorm:"primaryKey" json:"id"`
+	Channel   Channel   `gorm:"size:16;uniqueIndex" json:"channel"`
+	Config    string    `json:"-"` // AES-GCM encrypted JSON — same schema as before
+	Status    int16     `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (PlatformChannel) TableName() string { return "platform_channels" }
+
+// MerchantChannel records which channels a merchant is authorised to use.
+// No credentials are stored here; the actual keys live in PlatformChannel.
 type MerchantChannel struct {
 	ID         int64     `gorm:"primaryKey" json:"id"`
 	MerchantID int64     `gorm:"column:merchant_id;index" json:"merchant_id"`
 	Channel    Channel   `gorm:"size:16" json:"channel"`
-	Config     string    `json:"-"` // encrypted JSON, exposed via service layer
 	Status     int16     `json:"status"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
@@ -99,19 +117,19 @@ type Order struct {
 func (Order) TableName() string { return "orders" }
 
 type RefundOrder struct {
-	ID                int64        `gorm:"primaryKey" json:"id"`
-	RefundNo          string       `gorm:"column:refund_no;uniqueIndex;size:40" json:"refund_no"`
-	MerchantID        int64        `gorm:"column:merchant_id;index" json:"merchant_id"`
-	MerchantRefundNo  string       `gorm:"column:merchant_refund_no;size:64" json:"merchant_refund_no"`
-	OrderNo           string       `gorm:"column:order_no;size:40;index" json:"order_no"`
-	Channel           Channel      `gorm:"size:16" json:"channel"`
-	ChannelRefundNo   string       `gorm:"column:channel_refund_no;size:64" json:"channel_refund_no"`
-	Amount            int64        `json:"amount"`
-	Reason            string       `gorm:"size:256" json:"reason"`
-	Status            RefundStatus `gorm:"size:16" json:"status"`
-	RefundedAt        *time.Time   `json:"refunded_at"`
-	CreatedAt         time.Time    `json:"created_at"`
-	UpdatedAt         time.Time    `json:"updated_at"`
+	ID               int64        `gorm:"primaryKey" json:"id"`
+	RefundNo         string       `gorm:"column:refund_no;uniqueIndex;size:40" json:"refund_no"`
+	MerchantID       int64        `gorm:"column:merchant_id;index" json:"merchant_id"`
+	MerchantRefundNo string       `gorm:"column:merchant_refund_no;size:64" json:"merchant_refund_no"`
+	OrderNo          string       `gorm:"column:order_no;size:40;index" json:"order_no"`
+	Channel          Channel      `gorm:"size:16" json:"channel"`
+	ChannelRefundNo  string       `gorm:"column:channel_refund_no;size:64" json:"channel_refund_no"`
+	Amount           int64        `json:"amount"`
+	Reason           string       `gorm:"size:256" json:"reason"`
+	Status           RefundStatus `gorm:"size:16" json:"status"`
+	RefundedAt       *time.Time   `json:"refunded_at"`
+	CreatedAt        time.Time    `json:"created_at"`
+	UpdatedAt        time.Time    `json:"updated_at"`
 }
 
 func (RefundOrder) TableName() string { return "refund_orders" }

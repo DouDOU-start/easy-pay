@@ -44,16 +44,8 @@ body {
   min-height: 100vh;
 }
 
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 1;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  opacity: 0.035;
-  mix-blend-mode: overlay;
-}
+/* Noise overlay removed — the SVG turbulence + overlay blend was softening
+   text edges, especially with CJK glyphs. */
 
 /* ------------------------------------------------------------------ */
 /*  SIDEBAR                                                            */
@@ -123,19 +115,17 @@ body::before {
 
 .ep-brand-text .caption {
   margin-top: 6px;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.22em;
+  font-family: var(--font-body);
+  font-size: 11px;
+  letter-spacing: 0.04em;
   color: var(--text-tertiary);
 }
 
 .ep-section-label {
   padding: 28px 28px 12px;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.22em;
+  font-family: var(--font-body);
+  font-size: 12px;
+  letter-spacing: 0.04em;
   color: var(--text-tertiary);
   display: flex;
   align-items: center;
@@ -213,10 +203,10 @@ body::before {
   right: 0;
   padding: 20px 28px 24px;
   border-top: 1px solid var(--border-hairline);
-  font-family: var(--font-mono);
-  font-size: 10px;
+  font-family: var(--font-body);
+  font-size: 12px;
   color: var(--text-tertiary);
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   background: var(--bg-surface);
 }
 
@@ -273,14 +263,20 @@ body::before {
 }
 
 .ep-breadcrumb {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
+  font-family: var(--font-body);
+  font-size: 13px;
   color: var(--text-tertiary);
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
+}
+
+.ep-breadcrumb .crumb-root,
+.ep-breadcrumb .crumb-section {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .ep-breadcrumb .divider {
@@ -300,7 +296,7 @@ body::before {
 .ep-time-ticker {
   font-family: var(--font-mono);
   font-size: 11px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   color: var(--text-secondary);
   display: flex;
   align-items: center;
@@ -311,9 +307,9 @@ body::before {
 
 .ep-time-ticker .label {
   color: var(--text-tertiary);
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.22em;
+  font-size: 12px;
+  font-family: var(--font-body);
+  letter-spacing: 0.02em;
 }
 
 .ep-ghost-btn {
@@ -322,9 +318,8 @@ body::before {
   color: var(--text-secondary);
   padding: 9px 20px;
   font-family: var(--font-body);
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 13px;
+  letter-spacing: 0.02em;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.25s ease;
@@ -344,22 +339,109 @@ body::before {
 /* ------------------------------------------------------------------ */
 
 .ep-content {
-  padding: 48px 56px 64px !important;
+  padding: 32px 56px 32px !important;
   background: transparent !important;
   position: relative;
   z-index: 2;
   max-width: 1560px;
   width: 100%;
+  height: calc(100vh - 72px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Direct children (stat strip, filter bar, page-header, panels…) keep their
+   natural height; the table wrapper stretches to fill the rest. */
+.ep-content > * {
+  flex: 0 0 auto;
+}
+
+.ep-content > .ant-table-wrapper {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ep-content > .ant-table-wrapper > .ant-spin-nested-loading,
+.ep-content > .ant-table-wrapper .ant-spin-container {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ep-content > .ant-table-wrapper .ant-table {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ep-content > .ant-table-wrapper .ant-table-container {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ep-content > .ant-table-wrapper .ant-table-header {
+  flex: 0 0 auto;
+}
+
+.ep-content > .ant-table-wrapper .ant-table-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none !important;
+  overflow-y: auto !important;
+}
+
+.ep-content > .ant-table-wrapper .ant-table-pagination,
+.ep-content > .ant-table-wrapper .ant-pagination {
+  flex: 0 0 auto;
+  margin: 14px 0 0 !important;
+  padding: 0 4px;
+}
+
+/* On mobile, fall back to natural page scroll — internal table scroll feels
+   wrong on touch devices. */
+@media (max-width: 960px) {
+  .ep-content {
+    height: auto;
+    min-height: calc(100vh - 62px);
+    display: block;
+    overflow: visible;
+  }
+
+  .ep-content > .ant-table-wrapper,
+  .ep-content > .ant-table-wrapper > .ant-spin-nested-loading,
+  .ep-content > .ant-table-wrapper .ant-spin-container,
+  .ep-content > .ant-table-wrapper .ant-table,
+  .ep-content > .ant-table-wrapper .ant-table-container {
+    display: block;
+    flex: none;
+    min-height: 0;
+  }
+
+  .ep-content .ant-table-body {
+    max-height: none !important;
+    overflow-y: visible !important;
+  }
 }
 
 .ep-page-header {
-  margin-bottom: 44px;
+  margin-bottom: 18px;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: flex-start;
   gap: 40px;
   opacity: 0;
   animation: fadeInUp 0.7s ease forwards;
+}
+
+.ep-page-header:empty {
+  display: none;
 }
 
 .ep-page-header .col-title {
@@ -367,12 +449,11 @@ body::before {
 }
 
 .ep-page-header .eyebrow {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.3em;
+  font-family: var(--font-body);
+  font-size: 12px;
+  letter-spacing: 0.04em;
   color: var(--accent-gold);
-  margin-bottom: 16px;
+  margin-bottom: 6px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -388,11 +469,11 @@ body::before {
 
 .ep-page-header h1 {
   font-family: var(--font-display);
-  font-size: 56px;
+  font-size: 30px;
   font-weight: 500;
-  line-height: 1.12;
+  line-height: 1.1;
   letter-spacing: 0.01em;
-  margin: 0 0 18px 0;
+  margin: 0 0 6px 0;
   color: var(--text-primary);
 }
 
@@ -413,7 +494,7 @@ body::before {
 .ep-page-header .col-actions {
   display: flex;
   gap: 12px;
-  margin-top: 32px;
+  margin-top: 8px;
 }
 
 /* Stat strip */
@@ -423,14 +504,14 @@ body::before {
   gap: 1px;
   background: var(--border-hairline);
   border: 1px solid var(--border-hairline);
-  margin-bottom: 32px;
+  margin-bottom: 14px;
   opacity: 0;
   animation: fadeInUp 0.7s 0.1s ease forwards;
 }
 
 .ep-stat {
   background: var(--bg-surface);
-  padding: 26px 30px;
+  padding: 6px 16px;
   position: relative;
   overflow: hidden;
 }
@@ -447,24 +528,23 @@ body::before {
 }
 
 .ep-stat .label {
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
-  color: var(--text-tertiary);
-  margin-bottom: 12px;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+  margin-bottom: 1px;
 }
 
 .ep-stat .value {
   font-family: var(--font-display);
-  font-size: 42px;
+  font-size: 18px;
   color: var(--text-primary);
   letter-spacing: -0.015em;
   line-height: 1;
 }
 
 .ep-stat .value .unit {
-  font-size: 16px;
+  font-size: 14px;
   color: var(--text-tertiary);
   margin-left: 6px;
   font-style: italic;
@@ -473,19 +553,18 @@ body::before {
 .ep-stat .value .mono {
   font-family: var(--font-mono);
   font-style: normal;
-  font-size: 34px;
+  font-size: 16px;
 }
 
 .ep-stat .trend {
-  margin-top: 12px;
-  font-family: var(--font-mono);
+  margin-top: 1px;
+  font-family: var(--font-body);
   font-size: 10px;
   color: var(--accent-emerald);
   display: flex;
   align-items: center;
   gap: 6px;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.02em;
 }
 
 .ep-stat .trend.dim {
@@ -498,10 +577,10 @@ body::before {
   align-items: center;
   flex-wrap: wrap;
   gap: 12px;
-  padding: 18px 24px;
+  padding: 12px 20px;
   background: var(--bg-surface);
   border: 1px solid var(--border-hairline);
-  margin-bottom: 20px;
+  margin-bottom: 14px;
   position: relative;
   opacity: 0;
   animation: fadeInUp 0.7s 0.2s ease forwards;
@@ -518,12 +597,29 @@ body::before {
 }
 
 .ep-filter-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
-  color: var(--text-tertiary);
+  font-family: var(--font-body);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
   margin-right: 4px;
+}
+
+.ep-filter-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .ep-filter-actions {
+    margin-left: 0;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .ep-filter-actions .ant-btn {
+    flex: 1 1 auto;
+  }
 }
 
 /* Panel */
@@ -572,15 +668,15 @@ body::before {
 }
 
 .ep-content .ant-table-thead > tr > th {
-  background: transparent !important;
+  background: var(--bg-surface) !important;
   border-bottom: 1px solid var(--border-subtle) !important;
-  color: var(--text-tertiary) !important;
-  font-family: var(--font-mono) !important;
-  font-size: 10px !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.15em !important;
+  color: var(--text-secondary) !important;
+  font-family: var(--font-body) !important;
+  font-size: 12px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
   font-weight: 500 !important;
-  padding: 18px 20px !important;
+  padding: 11px 20px !important;
 }
 
 .ep-content .ant-table-thead > tr > th::before {
@@ -592,7 +688,7 @@ body::before {
   border-bottom: 1px solid var(--border-hairline) !important;
   color: var(--text-primary) !important;
   font-size: 13px !important;
-  padding: 18px 20px !important;
+  padding: 7px 20px !important;
   transition: background 0.15s ease;
 }
 
@@ -602,6 +698,25 @@ body::before {
 
 .ep-content .ant-table-tbody > tr:hover > td {
   background: var(--bg-elevated) !important;
+}
+
+.ep-content .ant-table-thead > tr > th.ant-table-cell-fix-left,
+.ep-content .ant-table-thead > tr > th.ant-table-cell-fix-right,
+.ep-content .ant-table-tbody > tr > td.ant-table-cell-fix-left,
+.ep-content .ant-table-tbody > tr > td.ant-table-cell-fix-right {
+  background: var(--bg-surface) !important;
+}
+
+.ep-content .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left,
+.ep-content .ant-table-tbody > tr:hover > td.ant-table-cell-fix-right {
+  background: var(--bg-elevated) !important;
+}
+
+.ep-content .ant-table-cell-fix-left::after,
+.ep-content .ant-table-cell-fix-right::after,
+.ep-content .ant-table-ping-right .ant-table-cell-fix-right-first::after,
+.ep-content .ant-table-ping-left .ant-table-cell-fix-left-last::after {
+  box-shadow: none !important;
 }
 
 .ep-content .ant-table-tbody > tr > td.ant-table-column-type-number,
@@ -784,10 +899,9 @@ textarea.ant-input {
 
 .ant-tag {
   border-radius: 0 !important;
-  font-family: var(--font-mono) !important;
-  font-size: 10px !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.12em !important;
+  font-family: var(--font-body) !important;
+  font-size: 12px !important;
+  letter-spacing: 0.02em !important;
   padding: 2px 10px !important;
   line-height: 20px !important;
   font-weight: 500 !important;
@@ -919,11 +1033,10 @@ textarea.ant-input {
 
 .ant-form-item-label > label {
   color: var(--text-secondary) !important;
-  font-size: 11px !important;
+  font-size: 13px !important;
   font-weight: 500 !important;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-family: var(--font-mono) !important;
+  letter-spacing: 0.02em;
+  font-family: var(--font-body) !important;
 }
 
 .ant-form-item-label > label::after {
@@ -943,6 +1056,67 @@ textarea.ant-input {
 
 .ant-form-item-required::before {
   color: var(--accent-gold) !important;
+}
+
+/* ------------------------------------------------------------------ */
+/*  SETTINGS                                                           */
+/* ------------------------------------------------------------------ */
+
+.ep-settings-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.9fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.ep-settings-panel {
+  padding: 28px 32px 30px;
+}
+
+.ep-settings-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.ep-settings-kicker {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--accent-gold);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.ep-settings-head h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 400;
+  color: var(--text-primary);
+}
+
+.ep-settings-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  line-height: 1.6;
+  text-align: right;
+}
+
+.ep-form-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.ep-form-grid--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ep-panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1500,7 +1674,130 @@ textarea.ant-input {
   vertical-align: middle;
 }
 
-/* Responsive */
+/* ------------------------------------------------------------------ */
+/*  MOBILE NAV — HAMBURGER / SIDER DRAWER                              */
+/* ------------------------------------------------------------------ */
+
+.ep-nav-trigger,
+.ep-sider-close {
+  display: none;
+}
+
+.ep-nav-backdrop {
+  display: none;
+}
+
+@media (max-width: 960px) {
+  /* Lift the sider off the normal flow and animate it in from the left */
+  .ep-sider {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    height: 100vh;
+    width: 280px !important;
+    min-width: 280px !important;
+    max-width: 84vw !important;
+    flex: 0 0 280px !important;
+    transform: translateX(-102%);
+    transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+    z-index: 60;
+    box-shadow: none;
+    overflow-y: auto;
+  }
+
+  .ep-shell--nav-open .ep-sider {
+    transform: translateX(0);
+    box-shadow: 28px 0 60px rgba(0, 0, 0, 0.55), 0 0 80px rgba(217, 184, 112, 0.06);
+  }
+
+  .ep-sider::before {
+    opacity: 0.6;
+  }
+
+  .ep-nav-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 6, 8, 0);
+    backdrop-filter: blur(0);
+    -webkit-backdrop-filter: blur(0);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease, backdrop-filter 0.3s ease;
+    z-index: 55;
+  }
+
+  .ep-shell--nav-open .ep-nav-backdrop {
+    background: rgba(5, 6, 8, 0.72);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    pointer-events: auto;
+    opacity: 1;
+  }
+
+  body.ep-nav-locked {
+    overflow: hidden;
+  }
+
+  /* Hamburger in header */
+  .ep-nav-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    margin-right: 16px;
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .ep-nav-trigger:hover,
+  .ep-nav-trigger:focus-visible {
+    color: var(--accent-gold);
+    border-color: var(--accent-gold);
+    box-shadow: 0 0 16px rgba(217, 184, 112, 0.18);
+    outline: none;
+  }
+
+  .ep-nav-trigger .anticon {
+    font-size: 17px;
+  }
+
+  /* Inline close button inside the brand block */
+  .ep-sider-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    width: 34px;
+    height: 34px;
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .ep-sider-close:hover {
+    color: var(--accent-gold);
+    border-color: var(--accent-gold);
+  }
+
+  .ep-sider-close .anticon {
+    font-size: 13px;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  RESPONSIVE — TABLET & PHONE                                        */
+/* ------------------------------------------------------------------ */
+
+/* Existing wide breakpoint kept for login hero + compact desktop */
 @media (max-width: 1100px) {
   .ep-login {
     grid-template-columns: 1fr;
@@ -1517,8 +1814,469 @@ textarea.ant-input {
   .ep-stat-strip {
     grid-template-columns: repeat(2, 1fr);
   }
+  .ep-settings-grid,
+  .ep-form-grid--2 {
+    grid-template-columns: 1fr;
+  }
   .ep-content {
     padding: 32px 28px !important;
+  }
+}
+
+/* Tablet — sider becomes drawer, header compacts */
+@media (max-width: 960px) {
+  .ep-header {
+    padding: 0 20px !important;
+    height: 62px !important;
+    gap: 12px;
+  }
+
+  .ep-breadcrumb {
+    font-size: 12px;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    letter-spacing: 0;
+  }
+
+  .ep-breadcrumb .crumb-root {
+    display: none;
+  }
+
+  .ep-breadcrumb > .divider:first-of-type {
+    display: none;
+  }
+
+  .ep-breadcrumb .current {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ep-header-right {
+    gap: 14px;
+  }
+
+  .ep-time-ticker {
+    display: none;
+  }
+
+  .ep-ghost-btn {
+    padding: 8px 14px;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    gap: 7px;
+  }
+
+  .ep-content {
+    padding: 24px 20px !important;
+  }
+
+  .ep-page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 18px;
+  }
+
+  .ep-page-header .col-actions {
+    margin-top: 0;
+    flex-wrap: wrap;
+  }
+
+  .ep-page-header h1 {
+    font-size: 38px;
+  }
+
+  /* Filter bar controls stretch */
+  .ep-filter-bar {
+    padding: 16px 18px;
+    gap: 10px;
+  }
+
+  .ep-filter-bar .ant-select,
+  .ep-filter-bar .ant-input,
+  .ep-filter-bar .ant-input-affix-wrapper,
+  .ep-filter-bar .ant-picker {
+    width: 100% !important;
+    flex: 1 1 180px;
+    min-width: 160px;
+  }
+
+  .ep-content .ant-table-thead > tr > th,
+  .ep-content .ant-table-tbody > tr > td {
+    padding: 8px 14px !important;
+  }
+
+  .ep-content .ant-pagination {
+    padding: 0 12px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  /* AntD modal respects viewport */
+  .ant-modal {
+    max-width: calc(100vw - 24px) !important;
+    margin: 16px auto !important;
+    padding-bottom: 0 !important;
+    top: 0 !important;
+  }
+
+  .ant-modal-body {
+    padding: 22px 24px !important;
+  }
+
+  .ant-modal-header {
+    padding: 20px 24px !important;
+  }
+
+  .ant-modal-footer {
+    padding: 14px 24px 20px !important;
+  }
+
+  .ant-modal-title {
+    font-size: 24px !important;
+  }
+
+  /* Drawer full-bleed */
+  .ant-drawer-content-wrapper {
+    width: 100vw !important;
+    max-width: 100vw !important;
+  }
+
+  .ant-drawer-header,
+  .ant-drawer-body {
+    padding: 22px 22px !important;
+  }
+
+  .ant-drawer-title {
+    font-size: 22px !important;
+  }
+}
+
+/* Phone */
+@media (max-width: 640px) {
+  body {
+    background-image:
+      radial-gradient(ellipse 120% 40% at 50% -10%, rgba(217, 184, 112, 0.1), transparent 70%),
+      radial-gradient(ellipse 80% 40% at 100% 100%, rgba(93, 167, 247, 0.05), transparent 70%);
+  }
+
+  .ep-header {
+    padding: 0 14px !important;
+    height: 56px !important;
+  }
+
+  .ep-nav-trigger {
+    margin-right: 10px;
+    width: 36px;
+    height: 36px;
+  }
+
+  .ep-breadcrumb {
+    gap: 6px;
+    font-size: 12px;
+  }
+
+  .ep-breadcrumb .crumb-section {
+    display: none;
+  }
+
+  .ep-breadcrumb .divider {
+    display: none;
+  }
+
+  .ep-breadcrumb .current {
+    letter-spacing: 0;
+  }
+
+  .ep-ghost-btn {
+    padding: 7px 10px;
+  }
+
+  .ep-ghost-btn-label {
+    display: none;
+  }
+
+  .ep-ghost-btn {
+    width: 36px;
+    height: 36px;
+    padding: 0 !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ep-ghost-btn .anticon {
+    margin: 0;
+  }
+
+  .ep-content {
+    padding: 20px 14px !important;
+  }
+
+  .ep-page-header {
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+
+  .ep-page-header .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.02em;
+    margin-bottom: 4px;
+  }
+
+  .ep-page-header .eyebrow::before {
+    width: 20px;
+  }
+
+  .ep-page-header h1 {
+    font-size: 30px;
+    line-height: 1.08;
+  }
+
+  .ep-page-header .subtitle {
+    font-size: 13px;
+  }
+
+  .ep-page-header .col-actions {
+    gap: 8px;
+  }
+
+  .ep-page-header .col-actions .ant-btn {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* Stat strip collapses to stacked rows, keeping the hairline grid feel */
+  .ep-stat-strip {
+    grid-template-columns: 1fr !important;
+  }
+
+  .ep-stat {
+    padding: 14px 18px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    align-items: baseline;
+    column-gap: 16px;
+  }
+
+  .ep-stat .label {
+    grid-column: 1 / 2;
+    grid-row: 1 / 2;
+    margin-bottom: 0;
+  }
+
+  .ep-stat .value {
+    grid-column: 1 / 2;
+    grid-row: 2 / 3;
+    font-size: 28px;
+    margin-top: 4px;
+  }
+
+  .ep-stat .value .mono {
+    font-size: 24px;
+  }
+
+  .ep-stat .trend {
+    grid-column: 2 / 3;
+    grid-row: 1 / 3;
+    margin-top: 0;
+    align-self: center;
+    font-size: 9px;
+  }
+
+  /* Filter bar — each control full-width */
+  .ep-filter-bar {
+    padding: 14px 14px;
+  }
+
+  .ep-filter-label {
+    width: 100%;
+    margin-right: 0;
+    margin-bottom: 2px;
+  }
+
+  .ep-filter-bar .ant-select,
+  .ep-filter-bar .ant-input,
+  .ep-filter-bar .ant-input-affix-wrapper,
+  .ep-filter-bar .ant-picker,
+  .ep-filter-bar .ant-btn {
+    width: 100% !important;
+    flex: 1 1 100%;
+  }
+
+  /* Tables — tighter padding + readable type on phones */
+  .ep-content .ant-table-thead > tr > th {
+    padding: 9px 12px !important;
+    font-size: 11px !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+    color: var(--text-secondary) !important;
+  }
+
+  .ep-content .ant-table-tbody > tr > td {
+    padding: 9px 12px !important;
+    font-size: 13px !important;
+  }
+
+  .ep-content .ant-table-container::before {
+    left: 14px;
+  }
+
+  .ep-content .ant-pagination-total-text {
+    width: 100%;
+    text-align: center;
+    order: -1;
+    margin-bottom: 6px;
+  }
+
+  /* Modals / drawers get tighter still */
+  .ant-modal-body {
+    padding: 18px 18px !important;
+  }
+
+  .ant-modal-header {
+    padding: 16px 18px !important;
+  }
+
+  .ant-modal-footer {
+    padding: 12px 18px 16px !important;
+  }
+
+  .ant-modal-title {
+    font-size: 20px !important;
+  }
+
+  .ant-drawer-header,
+  .ant-drawer-body {
+    padding: 18px 18px !important;
+  }
+
+  .ant-drawer-title {
+    font-size: 19px !important;
+  }
+
+  /* Buttons a touch smaller but still tappable */
+  .ant-btn {
+    height: 38px !important;
+    padding: 0 16px !important;
+    font-size: 12px !important;
+  }
+
+  .ant-btn-sm {
+    height: 30px !important;
+    padding: 0 12px !important;
+    font-size: 10px !important;
+  }
+
+  /* QR wrap scales down */
+  .ep-qr-wrap {
+    padding: 16px;
+  }
+
+  .ep-qr-wrap svg {
+    width: 100% !important;
+    height: auto !important;
+    max-width: 240px;
+  }
+
+  /* Panel accent rule shifts to match new padding */
+  .ep-panel::before,
+  .ep-filter-bar::before,
+  .ep-stat-strip + * .ep-panel::before {
+    left: 14px;
+  }
+}
+
+/* Login — phone */
+@media (max-width: 640px) {
+  .ep-login-form-wrap {
+    padding: 28px 22px;
+    align-items: flex-start;
+    padding-top: 64px;
+  }
+
+  .ep-login-form h2 {
+    font-size: 38px;
+  }
+
+  .ep-login-form .form-eyebrow {
+    margin-bottom: 12px;
+    font-size: 9px;
+    letter-spacing: 0.22em;
+  }
+
+  .ep-login-form .sub {
+    margin-bottom: 32px;
+    font-size: 13px;
+  }
+
+  .ep-login-form .ant-input,
+  .ep-login-form .ant-input-affix-wrapper {
+    height: 46px !important;
+    padding: 0 14px !important;
+  }
+
+  .ep-login-form .ant-btn-primary {
+    height: 50px !important;
+    font-size: 11px !important;
+    letter-spacing: 0.18em !important;
+  }
+
+  .ep-login-footer {
+    margin-top: 28px;
+    padding-top: 20px;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 8px;
+    letter-spacing: 0.2em;
+  }
+}
+
+/* Tiny phone */
+@media (max-width: 380px) {
+  .ep-page-header h1 {
+    font-size: 26px;
+  }
+
+  .ep-stat .value {
+    font-size: 24px;
+  }
+
+  .ep-stat .value .mono {
+    font-size: 20px;
+  }
+
+  .ep-login-form h2 {
+    font-size: 32px;
+  }
+}
+
+/* Landscape phones — give the sider drawer a tighter footprint */
+@media (max-width: 960px) and (orientation: landscape) and (max-height: 480px) {
+  .ep-sider {
+    width: 260px !important;
+    min-width: 260px !important;
+    flex: 0 0 260px !important;
+  }
+
+  .ep-brand {
+    padding: 20px 22px 22px;
+  }
+
+  .ep-section-label {
+    padding: 18px 24px 8px;
+  }
+
+  .ep-sider .ant-menu-item {
+    height: 38px !important;
+  }
+
+  .ep-sider-footer {
+    padding: 14px 24px 16px;
   }
 }
 
@@ -1553,4 +2311,206 @@ textarea.ant-input {
   right: -1px;
   border-left: none;
   border-top: none;
+}
+
+/* ------------------------------------------------------------------ */
+/*  SETUP WIZARD                                                       */
+/* ------------------------------------------------------------------ */
+
+.ep-setup {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-base);
+  position: relative;
+  overflow: hidden;
+  padding: 32px;
+}
+
+.ep-setup::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(ellipse 55% 65% at 30% 30%, rgba(217, 184, 112, 0.10), transparent 65%),
+    radial-gradient(ellipse 40% 50% at 80% 80%, rgba(93, 167, 247, 0.06), transparent 70%);
+  animation: slowDrift 18s ease-in-out infinite;
+}
+
+.ep-setup-card {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 580px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hairline);
+  padding: 48px 44px 36px;
+  opacity: 0;
+  animation: fadeInUp 0.7s 0.15s ease forwards;
+}
+
+.ep-setup-card::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 28px;
+  width: 32px;
+  height: 1px;
+  background: var(--accent-gold);
+}
+
+.ep-setup-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 36px;
+}
+
+.ep-setup-brand .mark {
+  width: 46px;
+  height: 46px;
+  border: 1px solid var(--accent-gold-dim);
+  background: linear-gradient(135deg, #2a2520, #0f0d0b);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 26px;
+  color: var(--accent-gold);
+  box-shadow: 0 0 28px rgba(217, 184, 112, 0.18);
+  position: relative;
+}
+
+.ep-setup-brand .mark::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border: 1px solid rgba(217, 184, 112, 0.15);
+}
+
+.ep-setup-brand .label {
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.ep-setup-brand .caption {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  margin-top: 5px;
+}
+
+.ep-setup-steps {
+  margin-bottom: 32px !important;
+}
+
+.ep-setup-steps .ant-steps-item-title {
+  color: var(--text-secondary) !important;
+  font-size: 12px !important;
+  letter-spacing: 0.02em;
+}
+
+.ep-setup-steps .ant-steps-item-finish .ant-steps-item-icon {
+  border-color: var(--accent-gold) !important;
+}
+
+.ep-setup-steps .ant-steps-item-finish .ant-steps-item-icon > .ant-steps-icon {
+  color: var(--accent-gold) !important;
+}
+
+.ep-setup-steps .ant-steps-item-process .ant-steps-item-icon {
+  background: var(--accent-gold) !important;
+  border-color: var(--accent-gold) !important;
+}
+
+.ep-setup-steps .ant-steps-item-process .ant-steps-item-icon > .ant-steps-icon {
+  color: #1a1511 !important;
+}
+
+.ep-setup-steps .ant-steps-item-wait .ant-steps-item-icon {
+  border-color: var(--border-subtle) !important;
+}
+
+.ep-setup-steps .ant-steps-item-wait .ant-steps-item-icon > .ant-steps-icon {
+  color: var(--text-tertiary) !important;
+}
+
+.ep-setup-steps .ant-steps-item-finish > .ant-steps-item-container > .ant-steps-item-tail::after {
+  background: var(--accent-gold) !important;
+}
+
+.ep-setup-body {
+  min-height: 260px;
+}
+
+.ep-setup-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 16px;
+}
+
+.ep-setup-test-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.ep-setup-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-hairline);
+}
+
+.ep-setup-summary-card {
+  background: var(--bg-deep);
+  border: 1px solid var(--border-hairline);
+  padding: 14px 18px;
+  margin-bottom: 12px;
+}
+
+.ep-setup-summary-label {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--accent-gold);
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  margin-bottom: 4px;
+}
+
+.ep-setup-summary-value {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.ep-setup-summary-value.mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 640px) {
+  .ep-setup {
+    padding: 16px;
+    align-items: flex-start;
+    padding-top: 48px;
+  }
+
+  .ep-setup-card {
+    padding: 32px 22px 28px;
+  }
+
+  .ep-setup-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ep-setup-brand .label {
+    font-size: 20px;
+  }
 }

@@ -14,42 +14,56 @@ import (
 	"github.com/easypay/easy-pay/internal/repository"
 )
 
-// Registry resolves (merchantID, channel) to a PaymentChannel.
-// Results are cached so we don't decrypt/parse on every request.
-// TODO: add TTL or invalidate on merchant_channel updates.
+// Registry resolves a merchant's authorised channel to the shared platform
+// PaymentChannel. The platform credentials (loaded from platform_channels) are
+// cached so we only decrypt once per server lifetime; call Invalidate whenever
+// a platform channel config is updated via the admin UI.
 type Registry struct {
-	repo   repository.MerchantRepo
-	cipher *crypto.AESGCM
+	platformRepo repository.PlatformChannelRepo
+	merchantRepo repository.MerchantRepo
+	cipher       *crypto.AESGCM
 
 	mu    sync.RWMutex
-	cache map[string]channel.PaymentChannel
+	cache map[model.Channel]channel.PaymentChannel
 }
 
-func New(repo repository.MerchantRepo, cipher *crypto.AESGCM) *Registry {
+func New(
+	platformRepo repository.PlatformChannelRepo,
+	merchantRepo repository.MerchantRepo,
+	cipher *crypto.AESGCM,
+) *Registry {
 	return &Registry{
-		repo:   repo,
-		cipher: cipher,
-		cache:  make(map[string]channel.PaymentChannel),
+		platformRepo: platformRepo,
+		merchantRepo: merchantRepo,
+		cipher:       cipher,
+		cache:        make(map[model.Channel]channel.PaymentChannel),
 	}
 }
 
+// Resolve checks that the merchant is authorised for ch, then returns the
+// platform-level PaymentChannel (creating and caching it if necessary).
 func (r *Registry) Resolve(ctx context.Context, merchantID int64, ch model.Channel) (channel.PaymentChannel, error) {
-	key := fmt.Sprintf("%d:%s", merchantID, ch)
+	// Verify merchant authorisation.
+	if _, err := r.merchantRepo.GetMerchantChannel(ctx, merchantID, ch); err != nil {
+		return nil, fmt.Errorf("merchant %d not authorised for channel %s: %w", merchantID, ch, err)
+	}
 
+	// Fast path: platform channel already initialised.
 	r.mu.RLock()
-	if c, ok := r.cache[key]; ok {
+	if c, ok := r.cache[ch]; ok {
 		r.mu.RUnlock()
 		return c, nil
 	}
 	r.mu.RUnlock()
 
-	mc, err := r.repo.GetChannelConfig(ctx, merchantID, ch)
+	// Slow path: decrypt platform config and build the channel client.
+	pc, err := r.platformRepo.Get(ctx, ch)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("platform channel %s not configured: %w", ch, err)
 	}
-	plain, err := r.cipher.Decrypt(mc.Config)
+	plain, err := r.cipher.Decrypt(pc.Config)
 	if err != nil {
-		return nil, fmt.Errorf("decrypt channel config: %w", err)
+		return nil, fmt.Errorf("decrypt platform channel config: %w", err)
 	}
 
 	var impl channel.PaymentChannel
@@ -66,13 +80,15 @@ func (r *Registry) Resolve(ctx context.Context, merchantID int64, ch model.Chann
 	}
 
 	r.mu.Lock()
-	r.cache[key] = impl
+	r.cache[ch] = impl
 	r.mu.Unlock()
 	return impl, nil
 }
 
-func (r *Registry) Invalidate(merchantID int64, ch model.Channel) {
+// Invalidate drops the cached platform channel client, forcing a re-decrypt on
+// the next request. Call this after updating a platform channel config.
+func (r *Registry) Invalidate(ch model.Channel) {
 	r.mu.Lock()
-	delete(r.cache, fmt.Sprintf("%d:%s", merchantID, ch))
+	delete(r.cache, ch)
 	r.mu.Unlock()
 }

@@ -96,3 +96,7 @@ CREATE TABLE IF NOT EXISTS admin_users (
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
+
+INSERT INTO admin_users (username, password_hash, role, status)
+SELECT 'admin', '$2a$10$9ULurvDZ5K2.sHOl6rCwDezy9STnslUhm6.PnKA3KvTy/c5KHCA6m', 'admin', 1
+WHERE NOT EXISTS (SELECT 1 FROM admin_users);

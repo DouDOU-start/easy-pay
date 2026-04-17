@@ -127,24 +127,4 @@ func randomToken() string {
 	return hex.EncodeToString(b)
 }
 
-// SeedAdmin creates the initial admin user if none exists. Called on startup.
-func SeedAdmin(ctx context.Context, db *gorm.DB, username, password string) error {
-	var count int64
-	if err := db.WithContext(ctx).Model(&model.AdminUser{}).Count(&count).Error; err != nil {
-		return err
-	}
-	if count > 0 {
-		return nil
-	}
-	hash, err := HashPassword(password)
-	if err != nil {
-		return err
-	}
-	return db.WithContext(ctx).Create(&model.AdminUser{
-		Username:     username,
-		PasswordHash: hash,
-		Role:         "admin",
-		Status:       1,
-	}).Error
-}
 
