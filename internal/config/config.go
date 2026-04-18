@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/spf13/viper"
+
+	"github.com/easypay/easy-pay/internal/pkg/defaults"
 )
 
 // ErrConfigNotFound is returned by Load when no configuration file can be found.
@@ -70,6 +72,13 @@ func Load(path string) (*Config, error) {
 	v.SetEnvPrefix("EASYPAY")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
+
+	// Defaults — env-driven, so .env can override without touching yaml.
+	d := defaults.FromEnv()
+	v.SetDefault("database.dsn", d.DSN())
+	v.SetDefault("redis.addr", d.RedisAddr)
+	v.SetDefault("redis.password", "")
+	v.SetDefault("redis.db", 0)
 
 	if err := v.ReadInConfig(); err != nil {
 		var notFound viper.ConfigFileNotFoundError

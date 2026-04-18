@@ -1,5 +1,12 @@
 .PHONY: dev run web web-deps web-build build tidy test infra infra-down up down logs
 
+# Load .env (single source of truth for ports/credentials) into every recipe.
+# docker compose reads .env on its own; this exposes the same vars to go run.
+ifneq (,$(wildcard .env))
+include .env
+export
+endif
+
 # One-shot dev command: infra (docker) + Go API + React UI, all in this terminal.
 # Output is prefixed with [api] / [web] so you can tell them apart.
 # Ctrl+C cleanly stops both processes.

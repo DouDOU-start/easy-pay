@@ -5,14 +5,15 @@ server:
   write_timeout: 15s
 
 database:
-  # port 15432 to avoid conflicting with any local postgres already bound to 5432
-  dsn: "host=localhost user=easypay password=easypay dbname=easypay port=15432 sslmode=disable TimeZone=Asia/Shanghai"
+  # dsn 留空时由 internal/pkg/defaults + .env 接管
+  # （EASYPAY_DB_HOST/PORT/USER/PASSWORD/NAME 可覆盖）
   max_idle_conns: 10
   max_open_conns: 100
   log_level: info
 
 redis:
-  addr: "localhost:6379"
+  # addr/password/db 留空时由 internal/pkg/defaults + .env 接管
+  # （EASYPAY_REDIS_PORT、EASYPAY_REDIS_ADDR 可覆盖）
   password: ""
   db: 0
 

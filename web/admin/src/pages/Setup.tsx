@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Input, InputNumber, Button, Steps, message, Alert } from 'antd'
 import { CheckCircleFilled, LoadingOutlined, DatabaseOutlined, CloudServerOutlined, UserOutlined, RocketOutlined } from '@ant-design/icons'
 import axios from 'axios'
@@ -15,19 +15,29 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
 export default function Setup() {
   const [step, setStep] = useState(0)
 
-  // --- DB state ---
-  const [dbHost, setDbHost] = useState('localhost')
-  const [dbPort, setDbPort] = useState(15432)
-  const [dbUser, setDbUser] = useState('easypay')
+  // --- DB state (initial values fetched from /setup/defaults) ---
+  const [dbHost, setDbHost] = useState('')
+  const [dbPort, setDbPort] = useState(0)
+  const [dbUser, setDbUser] = useState('')
   const [dbPass, setDbPass] = useState('')
-  const [dbName, setDbName] = useState('easypay')
+  const [dbName, setDbName] = useState('')
   const [dbTested, setDbTested] = useState(false)
 
   // --- Redis state ---
-  const [redisAddr, setRedisAddr] = useState('localhost:6379')
+  const [redisAddr, setRedisAddr] = useState('')
   const [redisPass, setRedisPass] = useState('')
   const [redisDB, setRedisDB] = useState(0)
   const [redisTested, setRedisTested] = useState(false)
+
+  useEffect(() => {
+    axios.get('/setup/defaults').then(({ data }) => {
+      setDbHost(data.db_host)
+      setDbPort(data.db_port)
+      setDbUser(data.db_user)
+      setDbName(data.db_name)
+      setRedisAddr(data.redis_addr)
+    }).catch(() => { /* fall back to empty inputs */ })
+  }, [])
 
   // --- Admin state ---
   const [adminEmail, setAdminEmail] = useState('')

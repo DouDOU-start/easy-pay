@@ -4,16 +4,16 @@ services:
     container_name: easypay-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: easypay
-      POSTGRES_PASSWORD: easypay
-      POSTGRES_DB: easypay
+      POSTGRES_USER: ${EASYPAY_DB_USER:-easypay}
+      POSTGRES_PASSWORD: ${EASYPAY_DB_PASSWORD:-easypay}
+      POSTGRES_DB: ${EASYPAY_DB_NAME:-easypay}
     ports:
-      - "15432:5432"
+      - "${EASYPAY_DB_PORT:-15432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./migrations:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U easypay"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -23,7 +23,7 @@ services:
     container_name: easypay-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "${EASYPAY_REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:

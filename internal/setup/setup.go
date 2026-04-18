@@ -21,6 +21,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	_ "gorm.io/driver/postgres"
 
+	"github.com/easypay/easy-pay/internal/pkg/defaults"
 	"github.com/easypay/easy-pay/migrations"
 )
 
@@ -47,17 +48,18 @@ type TestDBReq struct {
 }
 
 func (r *TestDBReq) applyDefaults() {
+	d := defaults.FromEnv()
 	if r.Host == "" {
-		r.Host = "localhost"
+		r.Host = d.DBHost
 	}
 	if r.Port == 0 {
-		r.Port = 15432
+		r.Port = d.DBPort
 	}
 	if r.User == "" {
-		r.User = "easypay"
+		r.User = d.DBUser
 	}
 	if r.DBName == "" {
-		r.DBName = "easypay"
+		r.DBName = d.DBName
 	}
 }
 
@@ -69,7 +71,7 @@ type TestRedisReq struct {
 
 func (r *TestRedisReq) applyDefaults() {
 	if r.Addr == "" {
-		r.Addr = "localhost:6379"
+		r.Addr = defaults.FromEnv().RedisAddr
 	}
 }
 
@@ -87,6 +89,11 @@ type InstallReq struct {
 // Status returns whether setup is required.
 func (h *Handler) Status(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"setup_required": !h.installed})
+}
+
+// Defaults returns the env-driven default values used to pre-fill the wizard.
+func (h *Handler) Defaults(c *gin.Context) {
+	c.JSON(http.StatusOK, defaults.FromEnv())
 }
 
 // StatusCompleted is used in normal mode — setup is already done.
