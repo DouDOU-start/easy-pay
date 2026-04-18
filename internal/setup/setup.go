@@ -86,14 +86,70 @@ type InstallReq struct {
 
 // --- endpoints ---
 
-// Status returns whether setup is required.
-func (h *Handler) Status(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"setup_required": !h.installed})
+// EnvHint is the per-service hint sent to the frontend when env-supplied
+// connection info both exists and is reachable. The wizard uses it to
+// pre-fill — and skip — the corresponding step. Passwords are deliberately
+// omitted; install handler reads the real value from env via PasswordPlaceholder.
+type EnvDBHint struct {
+	Host    string `json:"host"`
+	Port    int    `json:"port"`
+	User    string `json:"user"`
+	DBName  string `json:"dbname"`
+	SSLMode string `json:"ssl_mode"`
 }
 
-// Defaults returns the env-driven default values used to pre-fill the wizard.
-func (h *Handler) Defaults(c *gin.Context) {
-	c.JSON(http.StatusOK, defaults.FromEnv())
+type EnvRedisHint struct {
+	Addr string `json:"addr"`
+	DB   int    `json:"db"`
+}
+
+// PasswordPlaceholder is the sentinel the frontend echoes back to indicate
+// "use the env-provided password as-is". install resolves it from defaults.
+const PasswordPlaceholder = "__env__"
+
+// Status returns whether setup is required, plus optional EnvDB / EnvRedis
+// hints and the env-driven default values used to pre-fill the form.
+// Hints are present only when env-supplied credentials successfully
+// connect — letting the wizard auto-skip those steps in compose deployments
+// while still rendering them as fallback for bare-metal installs.
+func (h *Handler) Status(c *gin.Context) {
+	d := defaults.FromEnv()
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
+	defer cancel()
+
+	resp := gin.H{
+		"setup_required": !h.installed,
+		"defaults":       d, // password fields are tagged json:"-"
+	}
+	if hint, ok := probeEnvDB(ctx, d); ok {
+		resp["env_db"] = hint
+	}
+	if hint, ok := probeEnvRedis(ctx, d); ok {
+		resp["env_redis"] = hint
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+func probeEnvDB(ctx context.Context, d defaults.Values) (EnvDBHint, bool) {
+	req := TestDBReq{Host: d.DBHost, Port: d.DBPort, User: d.DBUser, Password: d.DBPassword, DBName: "postgres"}
+	db, err := sql.Open("pgx", buildDSN(req))
+	if err != nil {
+		return EnvDBHint{}, false
+	}
+	defer db.Close()
+	if db.PingContext(ctx) != nil {
+		return EnvDBHint{}, false
+	}
+	return EnvDBHint{Host: d.DBHost, Port: d.DBPort, User: d.DBUser, DBName: d.DBName, SSLMode: "disable"}, true
+}
+
+func probeEnvRedis(ctx context.Context, d defaults.Values) (EnvRedisHint, bool) {
+	rdb := redis.NewClient(&redis.Options{Addr: d.RedisAddr})
+	defer rdb.Close()
+	if rdb.Ping(ctx).Err() != nil {
+		return EnvRedisHint{}, false
+	}
+	return EnvRedisHint{Addr: d.RedisAddr, DB: 0}, true
 }
 
 // StatusCompleted is used in normal mode — setup is already done.
@@ -214,6 +270,7 @@ func (h *Handler) Install(c *gin.Context) {
 func (h *Handler) doInstall(ctx context.Context, req InstallReq) error {
 	req.DB.applyDefaults()
 	req.Redis.applyDefaults()
+	resolveEnvPlaceholders(&req)
 
 	// 1. Ensure the target database exists (create it if missing).
 	if err := ensureDatabase(ctx, req.DB); err != nil {
@@ -440,6 +497,18 @@ func friendlyRedisError(err error) string {
 		return "地址无法解析，请检查输入"
 	default:
 		return "Redis 连接失败，请检查配置"
+	}
+}
+
+// resolveEnvPlaceholders swaps PasswordPlaceholder values for the real
+// secrets from .env / defaults — so the SPA never has to handle them.
+func resolveEnvPlaceholders(req *InstallReq) {
+	d := defaults.FromEnv()
+	if req.DB.Password == PasswordPlaceholder {
+		req.DB.Password = d.DBPassword
+	}
+	if req.Redis.Password == PasswordPlaceholder {
+		req.Redis.Password = "" // Redis password is not modeled in defaults yet
 	}
 }
 

@@ -64,7 +64,6 @@ func runSetupMode(cfgPath string) {
 	sg := r.Group("/setup")
 	{
 		sg.GET("/status", setupH.Status)
-		sg.GET("/defaults", setupH.Defaults)
 		sg.POST("/test-db", setupH.TestDB)
 		sg.POST("/test-redis", setupH.TestRedis)
 		sg.POST("/install", setupH.Install)

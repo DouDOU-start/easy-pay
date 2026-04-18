@@ -60,7 +60,8 @@ make up
 - API：`http://localhost:8080`
 - Adminer（DB 可视化）：`http://localhost:8081` （server=postgres user=easypay pass=easypay db=easypay）
 - 管理后台：`cd web/admin && npm install && npm run dev` → `http://localhost:5173`
-- 默认管理员：`admin / admin123`（初始化时直接写入数据库 `admin_users` 表）
+- 首次启动会自动进入「初始化向导」，在浏览器里设置管理员账号 / 密码与连接信息后，
+  向导会写出 `configs/config.yaml`（已 gitignore）并重启 API。
 
 ### SQL 目录约定
 

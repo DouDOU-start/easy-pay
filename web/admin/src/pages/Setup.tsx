@@ -1,9 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Input, InputNumber, Button, Steps, message, Alert } from 'antd'
 import { CheckCircleFilled, LoadingOutlined, DatabaseOutlined, CloudServerOutlined, UserOutlined, RocketOutlined } from '@ant-design/icons'
 import axios from 'axios'
 
 const { Step } = Steps
+
+// 与后端 setup.PasswordPlaceholder 保持一致；表示"密码沿用 .env / defaults"。
+const ENV_PASSWORD = '__env__'
+
+type StepKey = 'db' | 'redis' | 'admin' | 'finish'
 
 const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <div style={{ marginBottom: 16 }}>
@@ -15,7 +20,7 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
 export default function Setup() {
   const [step, setStep] = useState(0)
 
-  // --- DB state (initial values fetched from /setup/defaults) ---
+  // --- DB state ---
   const [dbHost, setDbHost] = useState('')
   const [dbPort, setDbPort] = useState(0)
   const [dbUser, setDbUser] = useState('')
@@ -29,15 +34,47 @@ export default function Setup() {
   const [redisDB, setRedisDB] = useState(0)
   const [redisTested, setRedisTested] = useState(false)
 
+  // 当 env 提供且连通时跳过对应步骤（docker compose 场景）
+  const [envDBProvided, setEnvDBProvided] = useState(false)
+  const [envRedisProvided, setEnvRedisProvided] = useState(false)
+
   useEffect(() => {
-    axios.get('/setup/defaults').then(({ data }) => {
-      setDbHost(data.db_host)
-      setDbPort(data.db_port)
-      setDbUser(data.db_user)
-      setDbName(data.db_name)
-      setRedisAddr(data.redis_addr)
+    axios.get('/setup/status').then(({ data }) => {
+      const d = data.defaults || {}
+      setDbHost(d.db_host || '')
+      setDbPort(d.db_port || 0)
+      setDbUser(d.db_user || '')
+      setDbName(d.db_name || '')
+      setRedisAddr(d.redis_addr || '')
+
+      if (data.env_db) {
+        setEnvDBProvided(true)
+        setDbHost(data.env_db.host)
+        setDbPort(data.env_db.port)
+        setDbUser(data.env_db.user)
+        setDbName(data.env_db.dbname)
+        setDbPass(ENV_PASSWORD)
+        setDbTested(true)
+      }
+      if (data.env_redis) {
+        setEnvRedisProvided(true)
+        setRedisAddr(data.env_redis.addr)
+        setRedisDB(data.env_redis.db)
+        setRedisPass(ENV_PASSWORD)
+        setRedisTested(true)
+      }
     }).catch(() => { /* fall back to empty inputs */ })
   }, [])
+
+  const visibleSteps = useMemo<StepKey[]>(() => {
+    const list: StepKey[] = []
+    if (!envDBProvided) list.push('db')
+    if (!envRedisProvided) list.push('redis')
+    list.push('admin', 'finish')
+    return list
+  }, [envDBProvided, envRedisProvided])
+
+  const currentKey = visibleSteps[step]
 
   // --- Admin state ---
   const [adminEmail, setAdminEmail] = useState('')
@@ -102,9 +139,9 @@ export default function Setup() {
   // --- navigation ---
 
   const canNext = () => {
-    if (step === 0) return dbTested
-    if (step === 1) return redisTested
-    if (step === 2) return adminEmail && adminPwd.length >= 6 && adminPwd === adminPwdConfirm
+    if (currentKey === 'db') return dbTested
+    if (currentKey === 'redis') return redisTested
+    if (currentKey === 'admin') return adminEmail && adminPwd.length >= 6 && adminPwd === adminPwdConfirm
     return false
   }
 
@@ -209,12 +246,14 @@ export default function Setup() {
     </div>
   )
 
-  const steps = [
-    { title: '数据库', icon: <DatabaseOutlined />, content: stepDB },
-    { title: 'Redis', icon: <CloudServerOutlined />, content: stepRedis },
-    { title: '管理员', icon: <UserOutlined />, content: stepAdmin },
-    { title: '完成', icon: <RocketOutlined />, content: stepConfirm },
-  ]
+  const stepDefs: Record<StepKey, { title: string; icon: React.ReactNode; content: React.ReactNode }> = {
+    db: { title: '数据库', icon: <DatabaseOutlined />, content: stepDB },
+    redis: { title: 'Redis', icon: <CloudServerOutlined />, content: stepRedis },
+    admin: { title: '管理员', icon: <UserOutlined />, content: stepAdmin },
+    finish: { title: '完成', icon: <RocketOutlined />, content: stepConfirm },
+  }
+  const steps = visibleSteps.map(k => stepDefs[k])
+  const isLastStep = step === visibleSteps.length - 1
 
   return (
     <div className="ep-setup">
@@ -235,7 +274,7 @@ export default function Setup() {
 
         <div className="ep-setup-body">{steps[step].content}</div>
 
-        {step < 3 && (
+        {!isLastStep && (
           <div className="ep-setup-footer">
             {step > 0 && <Button onClick={() => setStep(step - 1)}>上一步</Button>}
             <Button type="primary" onClick={() => setStep(step + 1)} disabled={!canNext()} style={{ marginLeft: 'auto' }}>
