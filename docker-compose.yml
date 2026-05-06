@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: ${EASYPAY_DB_PASSWORD:-easypay}
       POSTGRES_DB: ${EASYPAY_DB_NAME:-easypay}
     ports:
-      - "${EASYPAY_DB_PORT:-15432}:5432"
+      - "${EASYPAY_DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./migrations:/docker-entrypoint-initdb.d

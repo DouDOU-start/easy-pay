@@ -14,7 +14,6 @@ import NotifyLogs from './pages/NotifyLogs'
 import Orders from './pages/Orders'
 import PlatformChannels from './pages/PlatformChannels'
 import Setup from './pages/Setup'
-import TestNotify from './pages/TestNotify'
 
 const AdminGuard = ({ children }: { children: JSX.Element }) => {
   const token = localStorage.getItem(ADMIN_TOKEN_KEY)
@@ -73,7 +72,6 @@ function AppRoutes() {
           <Route path="orders" element={<Orders />} />
           <Route path="notify-logs" element={<NotifyLogs />} />
           <Route path="platform" element={<PlatformChannels />} />
-          <Route path="test-notify" element={<TestNotify />} />
         </Route>
 
         <Route

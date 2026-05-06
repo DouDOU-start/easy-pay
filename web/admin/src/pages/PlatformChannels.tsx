@@ -10,6 +10,7 @@ interface PlatformChannel {
   id: number
   channel: 'wechat' | 'alipay'
   status: number
+  configured: boolean
   updated_at: string
 }
 
@@ -184,7 +185,7 @@ export default function PlatformChannels() {
     return ''
   }
 
-  const configured = list.filter((c) => c.status === 1).length
+  const configured = list.filter((c) => c.configured).length
 
   return (
     <>
@@ -207,8 +208,8 @@ export default function PlatformChannels() {
       <Table
         rowKey="channel"
         dataSource={[
-          list.find((c) => c.channel === 'wechat') ?? { channel: 'wechat', status: 0, updated_at: '' },
-          list.find((c) => c.channel === 'alipay') ?? { channel: 'alipay', status: 0, updated_at: '' },
+          list.find((c) => c.channel === 'wechat') ?? { channel: 'wechat', status: 0, configured: false, updated_at: '' },
+          list.find((c) => c.channel === 'alipay') ?? { channel: 'alipay', status: 0, configured: false, updated_at: '' },
         ]}
         pagination={false}
         scroll={{ x: 720 }}
@@ -233,12 +234,12 @@ export default function PlatformChannels() {
             title: '状态',
             dataIndex: 'status',
             width: 140,
-            render: (s: number, row: any) =>
-              row.updated_at
-                ? s === 1
-                  ? <Tag color="green">● 已配置</Tag>
-                  : <Tag color="orange">○ 已停用</Tag>
-                : <Tag>未配置</Tag>,
+            render: (_: number, row: any) =>
+              row.configured
+                ? <Tag color="green">● 已配置</Tag>
+                : row.status !== 1 && row.updated_at
+                  ? <Tag color="orange">○ 已停用</Tag>
+                  : <Tag>未配置</Tag>,
           },
           {
             title: '最后更新',

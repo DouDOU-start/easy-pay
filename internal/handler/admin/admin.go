@@ -206,6 +206,23 @@ func (h *Handler) UpdateMerchant(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": m})
 }
 
+// DeleteMerchant physically removes a merchant and every record that
+// references it (orders, refund_orders, notify_logs, merchant_channels). The
+// random typed-back confirmation lives entirely in the admin UI; the API
+// itself is gated by admin auth alone.
+func (h *Handler) DeleteMerchant(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	if _, err := h.merchants.GetByID(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND"})
+		return
+	}
+	if err := h.merchants.Delete(c.Request.Context(), id); err != nil {
+		fail500(c, "DELETE_FAILED", "删除失败，请稍后重试", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": "OK"})
+}
+
 // ResetMerchantPassword generates a new random password for a merchant and
 // returns the plaintext once. The merchant must use this to log in and can
 // change it afterwards.
@@ -258,6 +275,31 @@ func (h *Handler) UpsertMerchantChannel(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "msg": err.Error()})
 		return
 	}
+	// Block authorising a channel the platform itself can't service yet —
+	// otherwise the merchant looks "已启用" in the UI but every API call would
+	// fail at runtime. Disabling (status=0) always goes through.
+	if req.Status == 1 {
+		pc, err := h.platformChs.Get(c.Request.Context(), ch)
+		if err != nil || pc == nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code": "PLATFORM_NOT_CONFIGURED",
+				"msg":  "平台「" + channelDisplayName(ch) + "」凭证尚未配置或已停用，无法授权该渠道。请先在「渠道凭证」中完成配置。",
+			})
+			return
+		}
+		ok, err := h.platformChannelConfigured(pc)
+		if err != nil {
+			fail500(c, "BAD_CONFIG", "配置格式错误，请稍后重试", err)
+			return
+		}
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code": "PLATFORM_NOT_CONFIGURED",
+				"msg":  "平台「" + channelDisplayName(ch) + "」凭证不完整或已停用，无法授权该渠道。请先在「渠道凭证」中完成配置。",
+			})
+			return
+		}
+	}
 	mc := &model.MerchantChannel{
 		MerchantID: merchantID,
 		Channel:    ch,
@@ -295,9 +337,17 @@ var channelSecretFields = map[model.Channel][]string{
 	model.ChannelAlipay: {"private_key", "alipay_public_key"},
 }
 
+var channelRequiredFields = map[model.Channel][]string{
+	model.ChannelWechat: {"mch_id", "app_id", "api_v3_key", "serial_no", "private_key_pem", "public_key_id", "public_key_pem"},
+	model.ChannelAlipay: {"app_id", "private_key", "alipay_public_key"},
+}
+
 type upsertPlatformChannelReq struct {
 	Config json.RawMessage `json:"config" binding:"required"`
-	Status int16           `json:"status"`
+	// Pointer so an absent JSON field defaults to 1 while an explicit "status":0
+	// actually disables the platform channel (which then cascades to disable
+	// every merchant_channels row referencing it).
+	Status *int16 `json:"status"`
 }
 
 func (h *Handler) UpsertPlatformChannel(c *gin.Context) {
@@ -322,8 +372,8 @@ func (h *Handler) UpsertPlatformChannel(c *gin.Context) {
 		return
 	}
 	status := int16(1)
-	if req.Status != 0 {
-		status = req.Status
+	if req.Status != nil {
+		status = *req.Status
 	}
 	pc := &model.PlatformChannel{
 		Channel: ch,
@@ -335,7 +385,26 @@ func (h *Handler) UpsertPlatformChannel(c *gin.Context) {
 		return
 	}
 	h.registry.Invalidate(ch)
-	c.JSON(http.StatusOK, gin.H{"code": "OK"})
+
+	// If the resulting platform state can't actually serve traffic (disabled or
+	// missing required fields), cascade-disable every merchant authorisation
+	// for this channel. Otherwise the merchant UI keeps showing "已启用" for a
+	// route that runtime-resolves to "platform not configured". Re-enabling
+	// the platform later does NOT auto-restore — admins reopen per merchant.
+	cascaded := int64(0)
+	if usable, err := h.platformChannelConfigured(pc); err == nil && !usable {
+		n, derr := h.merchants.DisableChannelForAll(c.Request.Context(), ch)
+		if derr != nil {
+			// Save already committed; surface the cascade failure but don't
+			// roll back the platform change — admin can retry by re-saving.
+			fail500(c, "CASCADE_FAILED", "平台凭证已保存，但同步停用商户授权失败，请重试", derr)
+			return
+		}
+		cascaded = n
+	}
+	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": gin.H{
+		"merchant_channels_disabled": cascaded,
+	}})
 }
 
 func (h *Handler) GetPlatformChannel(c *gin.Context) {
@@ -378,8 +447,45 @@ func (h *Handler) ListPlatformChannels(c *gin.Context) {
 		fail500(c, "LIST_FAILED", "查询失败，请稍后重试", err)
 		return
 	}
+	out := make([]gin.H, 0, len(list))
+	for _, pc := range list {
+		configured, err := h.platformChannelConfigured(pc)
+		if err != nil {
+			fail500(c, "BAD_CONFIG", "配置格式错误，请稍后重试", err)
+			return
+		}
+		out = append(out, gin.H{
+			"id":         pc.ID,
+			"channel":    pc.Channel,
+			"status":     pc.Status,
+			"configured": configured,
+			"created_at": pc.CreatedAt,
+			"updated_at": pc.UpdatedAt,
+		})
+	}
 	// Config is intentionally omitted — use GetPlatformChannel for the edit view.
-	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": list})
+	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": out})
+}
+
+func (h *Handler) platformChannelConfigured(pc *model.PlatformChannel) (bool, error) {
+	if pc.Status != 1 {
+		return false, nil
+	}
+	plain, err := h.cipher.Decrypt(pc.Config)
+	if err != nil {
+		return false, err
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(plain, &cfg); err != nil {
+		return false, err
+	}
+	for _, field := range channelRequiredFields[pc.Channel] {
+		v, ok := cfg[field]
+		if !ok || strings.TrimSpace(fmt.Sprint(v)) == "" {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // mergePlatformSecrets replaces __KEEP__ sentinels in incoming config with the
@@ -591,6 +697,17 @@ func parsePage(c *gin.Context) (int, int) {
 func HashPassword(pw string) (string, error) {
 	h, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost)
 	return string(h), err
+}
+
+func channelDisplayName(ch model.Channel) string {
+	switch ch {
+	case model.ChannelWechat:
+		return "微信支付"
+	case model.ChannelAlipay:
+		return "支付宝"
+	default:
+		return string(ch)
+	}
 }
 
 // fail500 logs the real error server-side and returns a generic message to the

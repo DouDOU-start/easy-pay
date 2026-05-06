@@ -6,7 +6,6 @@ import {
   BellOutlined,
   LogoutOutlined,
   ApiOutlined,
-  ExperimentOutlined,
   MenuOutlined,
   CloseOutlined,
 } from '@ant-design/icons'
@@ -20,7 +19,6 @@ const pageTitles: Record<string, { crumb: string; section: string }> = {
   '/orders': { crumb: '订单中心', section: '交易' },
   '/notify-logs': { crumb: '通知日志', section: '监控' },
   '/platform': { crumb: '渠道凭证', section: '平台' },
-  '/test-notify': { crumb: '测试回调', section: '开发' },
 }
 
 function formatNow() {
@@ -60,7 +58,6 @@ export default function Layout() {
     { key: '/orders', icon: <FileTextOutlined />, label: '订单中心' },
     { key: '/notify-logs', icon: <BellOutlined />, label: '通知日志' },
     { key: '/platform', icon: <ApiOutlined />, label: '渠道凭证' },
-    { key: '/test-notify', icon: <ExperimentOutlined />, label: '测试回调' },
   ]
 
   const current = pageTitles[loc.pathname] ?? { crumb: '概览', section: '控制台' }

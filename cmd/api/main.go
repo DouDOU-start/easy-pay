@@ -24,14 +24,12 @@ import (
 	"github.com/easypay/easy-pay/internal/handler/api"
 	"github.com/easypay/easy-pay/internal/handler/callback"
 	"github.com/easypay/easy-pay/internal/handler/merchant"
-	testsinkh "github.com/easypay/easy-pay/internal/handler/testsink"
 	"github.com/easypay/easy-pay/internal/pkg/crypto"
 	"github.com/easypay/easy-pay/internal/repository"
 	"github.com/easypay/easy-pay/internal/server"
 	"github.com/easypay/easy-pay/internal/service/notify"
 	"github.com/easypay/easy-pay/internal/service/payment"
 	"github.com/easypay/easy-pay/internal/setup"
-	"github.com/easypay/easy-pay/internal/testsink"
 	webadmin "github.com/easypay/easy-pay/web/admin"
 )
 
@@ -151,8 +149,6 @@ func runNormalMode(cfg *config.Config) {
 	adminAuthH := admin.NewAuthHandler(db, rdb)
 	merchantH := merchant.New(merchantRepo, orderRepo, notifyLogRepo)
 	merchantAuthH := merchant.NewAuthHandler(merchantRepo, rdb)
-	sink := testsink.New(200)
-	testSinkH := testsinkh.New(sink)
 
 	// --- router / server ---
 	gin.SetMode(cfg.Server.Mode)
@@ -168,7 +164,6 @@ func runNormalMode(cfg *config.Config) {
 		AdminAuth:    adminAuthH,
 		Merchant:     merchantH,
 		MerchantAuth: merchantAuthH,
-		TestSink:     testSinkH,
 		StaticFS:     staticFS,
 	})
 

@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Table, Button, Modal, Form, Input, Select, Switch, Space, Tag, message, Typography } from 'antd'
-import { PlusOutlined, SettingOutlined, EditOutlined, SearchOutlined, CopyOutlined, KeyOutlined } from '@ant-design/icons'
+import { PlusOutlined, SettingOutlined, EditOutlined, SearchOutlined, CopyOutlined, KeyOutlined, DeleteOutlined } from '@ant-design/icons'
 import { api } from '../api'
 import ChannelConfigDrawer from '../components/ChannelConfigDrawer'
 
@@ -55,6 +55,16 @@ function CredRow({ label, value, sensitive }: { label: string; value: string; se
   )
 }
 
+// Code charset deliberately excludes 0/O/1/I to avoid typo-back ambiguity.
+const DELETE_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+function generateDeleteCode(len = 6) {
+  let s = ''
+  const buf = new Uint32Array(len)
+  crypto.getRandomValues(buf)
+  for (let i = 0; i < len; i++) s += DELETE_CODE_CHARS[buf[i] % DELETE_CODE_CHARS.length]
+  return s
+}
+
 export default function Merchants() {
   const [list, setList] = useState<Merchant[]>([])
   const [total, setTotal] = useState(0)
@@ -65,8 +75,16 @@ export default function Merchants() {
   const [createOpen, setCreateOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<Merchant | null>(null)
   const [channelTarget, setChannelTarget] = useState<Merchant | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Merchant | null>(null)
+  const [deleteCode, setDeleteCode] = useState('')
+  const [deleteInput, setDeleteInput] = useState('')
+  const [deleting, setDeleting] = useState(false)
   const [createForm] = Form.useForm()
   const [editForm] = Form.useForm()
+  const deleteCodeMatched = useMemo(
+    () => deleteInput.trim().toUpperCase() === deleteCode,
+    [deleteInput, deleteCode],
+  )
 
   const load = async () => {
     const params: Record<string, any> = { page, size }
@@ -190,6 +208,34 @@ export default function Merchants() {
         })
       },
     })
+  }
+
+  const openDelete = (m: Merchant) => {
+    setDeleteTarget(m)
+    setDeleteCode(generateDeleteCode())
+    setDeleteInput('')
+  }
+
+  const closeDelete = () => {
+    setDeleteTarget(null)
+    setDeleteInput('')
+    setDeleteCode('')
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteTarget || !deleteCodeMatched) return
+    setDeleting(true)
+    try {
+      await api.delete(`/admin/merchants/${deleteTarget.id}`)
+      message.success(`商户 ${deleteTarget.mch_no} 已删除`)
+      closeDelete()
+      setEditTarget(null)
+      load()
+    } catch (e: any) {
+      message.error(e.response?.data?.msg ?? '删除失败')
+    } finally {
+      setDeleting(false)
+    }
   }
 
   const openEdit = (m: Merchant) => {
@@ -384,6 +430,7 @@ export default function Merchants() {
         okText="保存"
         cancelText="取消"
         destroyOnClose
+        centered
       >
         <Form form={editForm} layout="vertical" requiredMark={false}>
           <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
@@ -429,6 +476,115 @@ export default function Merchants() {
                 重置密码
               </Button>
             </div>
+
+            <div style={{
+              marginTop: 18,
+              paddingTop: 16,
+              borderTop: '1px dashed var(--border-hairline)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 16,
+            }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--accent-crimson)', marginBottom: 4 }}>
+                  删除商户
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.6 }}>
+                  将一并删除该商户的订单、退款、回调记录与渠道授权，操作不可恢复。
+                </div>
+              </div>
+              <Button danger icon={<DeleteOutlined />} onClick={() => openDelete(editTarget)}>
+                删除商户
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        title={deleteTarget ? `删除商户 · ${deleteTarget.mch_no}` : '删除商户'}
+        open={!!deleteTarget}
+        onCancel={closeDelete}
+        destroyOnClose
+        maskClosable={false}
+        centered
+        footer={[
+          <Button key="cancel" onClick={closeDelete}>取消</Button>,
+          <Button
+            key="delete"
+            danger
+            type="primary"
+            icon={<DeleteOutlined />}
+            disabled={!deleteCodeMatched}
+            loading={deleting}
+            onClick={confirmDelete}
+          >
+            确认删除
+          </Button>,
+        ]}
+      >
+        {deleteTarget && (
+          <div>
+            <div style={{
+              padding: '10px 14px',
+              marginBottom: 16,
+              background: 'rgba(232, 96, 96, 0.06)',
+              border: '1px solid rgba(232, 96, 96, 0.3)',
+              fontSize: 12,
+              color: 'var(--accent-crimson)',
+              lineHeight: 1.7,
+            }}>
+              <div style={{ marginBottom: 4 }}>⚠ 此操作不可恢复。</div>
+              <div style={{ color: 'var(--text-secondary)' }}>
+                商户 <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-gold)' }}>
+                  {deleteTarget.name || deleteTarget.mch_no}
+                </span> 及其全部订单、退款、回调记录与渠道授权将被永久删除。
+              </div>
+            </div>
+
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 8 }}>
+              请输入下方确认码以继续：
+            </div>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '10px 14px',
+              marginBottom: 14,
+              background: 'rgba(217, 184, 112, 0.06)',
+              border: '1px dashed rgba(217, 184, 112, 0.4)',
+            }}>
+              <Typography.Text
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 18,
+                  letterSpacing: '0.2em',
+                  color: 'var(--accent-gold)',
+                  userSelect: 'none',
+                }}
+              >
+                {deleteCode}
+              </Typography.Text>
+              <Button
+                size="small"
+                onClick={() => {
+                  setDeleteCode(generateDeleteCode())
+                  setDeleteInput('')
+                }}
+              >
+                换一个
+              </Button>
+            </div>
+            <Input
+              autoFocus
+              placeholder="在此输入上方确认码"
+              value={deleteInput}
+              onChange={(e) => setDeleteInput(e.target.value)}
+              onPressEnter={() => deleteCodeMatched && confirmDelete()}
+              style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.15em' }}
+              status={deleteInput && !deleteCodeMatched ? 'error' : undefined}
+            />
           </div>
         )}
       </Modal>

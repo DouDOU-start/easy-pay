@@ -67,11 +67,21 @@ type MerchantRepo interface {
 	GetByEmail(ctx context.Context, email string) (*model.Merchant, error)
 	List(ctx context.Context, f MerchantFilter) ([]*model.Merchant, int64, error)
 	Update(ctx context.Context, m *model.Merchant) error
+	// Delete removes the merchant and every record that references it
+	// (notify_logs, refund_orders, orders, merchant_channels) in a single
+	// transaction. There is no soft-delete column on merchants, so this is
+	// physical deletion — only the admin DeleteMerchant handler should call it.
+	Delete(ctx context.Context, id int64) error
 
 	// Channel authorisation — no credentials stored here.
 	UpsertMerchantChannel(ctx context.Context, mc *model.MerchantChannel) error
 	GetMerchantChannel(ctx context.Context, merchantID int64, ch model.Channel) (*model.MerchantChannel, error)
 	ListChannels(ctx context.Context, merchantID int64) ([]*model.MerchantChannel, error)
+	// DisableChannelForAll bulk-disables every merchant_channels row for the
+	// given channel. Used to cascade a platform-level disable so the UI doesn't
+	// keep advertising "已启用" for a channel that can no longer route traffic.
+	// Returns the number of rows actually flipped (was status=1, now =0).
+	DisableChannelForAll(ctx context.Context, ch model.Channel) (int64, error)
 }
 
 // MerchantFilter drives the admin list endpoint. Keyword matches mch_no / name
@@ -143,6 +153,34 @@ func (r *merchantRepo) Update(ctx context.Context, m *model.Merchant) error {
 	return r.db.WithContext(ctx).Save(m).Error
 }
 
+func (r *merchantRepo) Delete(ctx context.Context, id int64) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// notify_logs and merchant_channels have no FK constraint blocking us,
+		// but orders / refund_orders do (REFERENCES merchants(id) without
+		// ON DELETE CASCADE), so children must go first.
+		if err := tx.Where("merchant_id = ?", id).Delete(&model.NotifyLog{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("merchant_id = ?", id).Delete(&model.RefundOrder{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("merchant_id = ?", id).Delete(&model.Order{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("merchant_id = ?", id).Delete(&model.MerchantChannel{}).Error; err != nil {
+			return err
+		}
+		res := tx.Delete(&model.Merchant{}, id)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return ErrNotFound
+		}
+		return nil
+	})
+}
+
 func (r *merchantRepo) UpsertMerchantChannel(ctx context.Context, mc *model.MerchantChannel) error {
 	var existing model.MerchantChannel
 	err := r.db.WithContext(ctx).
@@ -168,6 +206,13 @@ func (r *merchantRepo) GetMerchantChannel(ctx context.Context, merchantID int64,
 		return nil, ErrNotFound
 	}
 	return &mc, err
+}
+
+func (r *merchantRepo) DisableChannelForAll(ctx context.Context, ch model.Channel) (int64, error) {
+	res := r.db.WithContext(ctx).Model(&model.MerchantChannel{}).
+		Where("channel = ? AND status = 1", ch).
+		Updates(map[string]any{"status": 0, "updated_at": time.Now()})
+	return res.RowsAffected, res.Error
 }
 
 func (r *merchantRepo) ListChannels(ctx context.Context, merchantID int64) ([]*model.MerchantChannel, error) {

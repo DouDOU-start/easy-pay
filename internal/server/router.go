@@ -12,7 +12,6 @@ import (
 	"github.com/easypay/easy-pay/internal/handler/callback"
 	"github.com/easypay/easy-pay/internal/handler/merchant"
 	"github.com/easypay/easy-pay/internal/handler/middleware"
-	testsinkh "github.com/easypay/easy-pay/internal/handler/testsink"
 	"github.com/easypay/easy-pay/internal/repository"
 	"github.com/easypay/easy-pay/internal/setup"
 )
@@ -25,7 +24,6 @@ type Deps struct {
 	AdminAuth    *admin.AuthHandler
 	Merchant     *merchant.Handler
 	MerchantAuth *merchant.AuthHandler
-	TestSink     *testsinkh.Handler
 	// StaticFS serves the embedded admin SPA. When nil, no UI is served.
 	StaticFS fs.FS
 }
@@ -53,12 +51,6 @@ func NewRouter(d Deps) *gin.Engine {
 
 	// ---------- provider callbacks ----------
 	r.POST("/callback/:channel/:merchant_id", d.Callback.Receive)
-
-	// ---------- dev-only test callback sink (public, any method) ----------
-	if d.TestSink != nil {
-		r.Any("/test/notify", d.TestSink.Receive)
-		r.Any("/test/notify/*slot", d.TestSink.Receive)
-	}
 
 	// ---------- admin: auth (public) ----------
 	adminPub := r.Group("/admin")
@@ -98,6 +90,7 @@ func NewRouter(d Deps) *gin.Engine {
 		adminGrp.GET("/merchants", d.Admin.ListMerchants)
 		adminGrp.POST("/merchants", d.Admin.CreateMerchant)
 		adminGrp.PUT("/merchants/:id", d.Admin.UpdateMerchant)
+		adminGrp.DELETE("/merchants/:id", d.Admin.DeleteMerchant)
 		adminGrp.POST("/merchants/:id/reset-password", d.Admin.ResetMerchantPassword)
 
 		// Merchant channel authorisation (no credentials — just enable/disable)
@@ -118,11 +111,6 @@ func NewRouter(d Deps) *gin.Engine {
 		adminGrp.GET("/notify_logs", d.Admin.ListNotifyLogs)
 		adminGrp.POST("/notify_logs/:id/retry", d.Admin.RetryNotify)
 
-		// Test notify sink (dev helper — reads in-memory ring buffer)
-		if d.TestSink != nil {
-			adminGrp.GET("/test_notify", d.TestSink.List)
-			adminGrp.DELETE("/test_notify", d.TestSink.Clear)
-		}
 	}
 
 	// ---------- embedded admin SPA ----------
@@ -146,7 +134,6 @@ func SpaHandler(static fs.FS) gin.HandlerFunc {
 			strings.HasPrefix(p, "/admin/") ||
 			strings.HasPrefix(p, "/merchant/") ||
 			strings.HasPrefix(p, "/callback/") ||
-			strings.HasPrefix(p, "/test/") ||
 			strings.HasPrefix(p, "/setup/") {
 			c.Status(http.StatusNotFound)
 			return

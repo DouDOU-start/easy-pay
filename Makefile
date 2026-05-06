@@ -1,4 +1,4 @@
-.PHONY: dev run web web-deps web-build build tidy test infra infra-down up down logs
+.PHONY: dev run web web-deps web-ensure web-build build tidy test infra infra-down up down logs
 
 # Load .env (single source of truth for ports/credentials) into every recipe.
 # docker compose reads .env on its own; this exposes the same vars to go run.
@@ -10,11 +10,10 @@ endif
 # One-shot dev command: infra (docker) + Go API + React UI, all in this terminal.
 # Output is prefixed with [api] / [web] so you can tell them apart.
 # Ctrl+C cleanly stops both processes.
-dev: infra web-deps
+dev: web-ensure
 	@echo ""
 	@echo "  →  Admin UI   http://localhost:5173"
 	@echo "  →  Go API     http://localhost:8080"
-	@echo "  →  Adminer    http://localhost:8081"
 	@echo ""
 	@echo "Press Ctrl+C to stop everything."
 	@echo ""
@@ -58,6 +57,14 @@ down:
 
 logs:
 	docker compose logs -f api
+
+# Build dist only if it doesn't exist yet (first run). Dev uses Vite HMR at :5173;
+# dist is only needed so `go run` can embed a fallback SPA for :8080.
+web-ensure: web-deps
+	@if [ ! -f web/admin/dist/index.html ]; then \
+		echo "→ building frontend dist (first run only)..."; \
+		cd web/admin && npm run build; \
+	fi
 
 # Build the frontend bundle into web/admin/dist for go:embed to pick up.
 web-build: web-deps

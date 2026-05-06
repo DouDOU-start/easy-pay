@@ -25,7 +25,7 @@ type Values struct {
 func FromEnv() Values {
 	return Values{
 		DBHost:     envOr("EASYPAY_DB_HOST", "localhost"),
-		DBPort:     envOrInt("EASYPAY_DB_PORT", 15432),
+		DBPort:     envOrInt("EASYPAY_DB_PORT", 5432),
 		DBUser:     envOr("EASYPAY_DB_USER", "easypay"),
 		DBPassword: envOr("EASYPAY_DB_PASSWORD", "easypay"),
 		DBName:     envOr("EASYPAY_DB_NAME", "easypay"),

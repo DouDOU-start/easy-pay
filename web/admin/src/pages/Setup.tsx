@@ -1,12 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Input, InputNumber, Button, Steps, message, Alert } from 'antd'
 import { CheckCircleFilled, LoadingOutlined, DatabaseOutlined, CloudServerOutlined, UserOutlined, RocketOutlined } from '@ant-design/icons'
 import axios from 'axios'
 
 const { Step } = Steps
-
-// 与后端 setup.PasswordPlaceholder 保持一致；表示"密码沿用 .env / defaults"。
-const ENV_PASSWORD = '__env__'
 
 type StepKey = 'db' | 'redis' | 'admin' | 'finish'
 
@@ -34,10 +31,6 @@ export default function Setup() {
   const [redisDB, setRedisDB] = useState(0)
   const [redisTested, setRedisTested] = useState(false)
 
-  // 当 env 提供且连通时跳过对应步骤（docker compose 场景）
-  const [envDBProvided, setEnvDBProvided] = useState(false)
-  const [envRedisProvided, setEnvRedisProvided] = useState(false)
-
   useEffect(() => {
     axios.get('/setup/status').then(({ data }) => {
       const d = data.defaults || {}
@@ -46,34 +39,10 @@ export default function Setup() {
       setDbUser(d.db_user || '')
       setDbName(d.db_name || '')
       setRedisAddr(d.redis_addr || '')
-
-      if (data.env_db) {
-        setEnvDBProvided(true)
-        setDbHost(data.env_db.host)
-        setDbPort(data.env_db.port)
-        setDbUser(data.env_db.user)
-        setDbName(data.env_db.dbname)
-        setDbPass(ENV_PASSWORD)
-        setDbTested(true)
-      }
-      if (data.env_redis) {
-        setEnvRedisProvided(true)
-        setRedisAddr(data.env_redis.addr)
-        setRedisDB(data.env_redis.db)
-        setRedisPass(ENV_PASSWORD)
-        setRedisTested(true)
-      }
     }).catch(() => { /* fall back to empty inputs */ })
   }, [])
 
-  const visibleSteps = useMemo<StepKey[]>(() => {
-    const list: StepKey[] = []
-    if (!envDBProvided) list.push('db')
-    if (!envRedisProvided) list.push('redis')
-    list.push('admin', 'finish')
-    return list
-  }, [envDBProvided, envRedisProvided])
-
+  const visibleSteps: StepKey[] = ['db', 'redis', 'admin', 'finish']
   const currentKey = visibleSteps[step]
 
   // --- Admin state ---
@@ -154,7 +123,7 @@ export default function Setup() {
           <Input value={dbHost} onChange={e => { setDbHost(e.target.value); setDbTested(false) }} />
         </Field>
         <Field label="端口">
-          <InputNumber style={{ width: '100%' }} min={1} max={65535} value={dbPort} onChange={v => { setDbPort(v ?? 15432); setDbTested(false) }} />
+          <InputNumber style={{ width: '100%' }} min={1} max={65535} value={dbPort} onChange={v => { setDbPort(v ?? 5432); setDbTested(false) }} />
         </Field>
       </div>
       <div className="ep-setup-form-grid">

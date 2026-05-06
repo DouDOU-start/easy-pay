@@ -66,15 +66,14 @@ make up
 ### SQL 目录约定
 
 - `migrations/` 仅放 PostgreSQL 首次启动时由 `docker-compose.yml` 自动加载的 SQL。
-- `sql/helpers/` 放本地联调、造数、测试回调用的手工 SQL，不会自动执行。
-- 当前可用 helper SQL：`sql/helpers/seed_admin.sql`、`sql/helpers/seed_notify_logs.sql`、`sql/helpers/point_to_test_sink.sql`
+- `sql/helpers/` 放本地联调和造数用的手工 SQL，不会自动执行。
+- 当前可用 helper SQL：`sql/helpers/seed_admin.sql`、`sql/helpers/seed_notify_logs.sql`
 
 手工执行示例：
 
 ```bash
-psql "postgresql://easypay:easypay@localhost:15432/easypay?sslmode=disable" -f sql/helpers/seed_admin.sql
-psql "postgresql://easypay:easypay@localhost:15432/easypay?sslmode=disable" -f sql/helpers/seed_notify_logs.sql
-psql "postgresql://easypay:easypay@localhost:15432/easypay?sslmode=disable" -f sql/helpers/point_to_test_sink.sql
+psql "postgresql://easypay:easypay@localhost:5432/easypay?sslmode=disable" -f sql/helpers/seed_admin.sql
+psql "postgresql://easypay:easypay@localhost:5432/easypay?sslmode=disable" -f sql/helpers/seed_notify_logs.sql
 ```
 
 `seed_admin.sql` 会直接写入 `admin_users`，用于现有数据库初始化或重置管理员账号密码。
