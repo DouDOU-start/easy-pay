@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -127,6 +128,7 @@ func runNormalMode(cfg *config.Config) {
 	orderRepo := repository.NewOrderRepo(db)
 	refundRepo := repository.NewRefundRepo(db)
 	notifyLogRepo := repository.NewNotifyLogRepo(db)
+	settingsRepo := repository.NewSystemSettingRepo(db)
 
 	// --- services ---
 	reg := registry.New(platformChRepo, merchantRepo, cipher)
@@ -139,16 +141,22 @@ func runNormalMode(cfg *config.Config) {
 	notifySvc.Start(4)
 	defer notifySvc.Stop()
 
-	platformBase := cfg.Server.PlatformBase
-	if platformBase == "" {
-		platformBase = "http://localhost" + cfg.Server.Addr
+	fallbackBase := cfg.Server.PlatformBase
+	if fallbackBase == "" {
+		fallbackBase = "http://localhost" + cfg.Server.Addr
 	}
-	paymentSvc := payment.NewService(orderRepo, refundRepo, reg, notifySvc, platformBase, logger)
+	platformBaseGetter := func(ctx context.Context) string {
+		if val, err := settingsRepo.Get(ctx, "platform_base"); err == nil && val != "" {
+			return strings.TrimRight(val, "/")
+		}
+		return fallbackBase
+	}
+	paymentSvc := payment.NewService(orderRepo, refundRepo, reg, notifySvc, platformBaseGetter, logger)
 
 	// --- handlers ---
 	paymentH := api.NewPaymentHandler(paymentSvc)
 	callbackH := callback.New(paymentSvc, reg, logger)
-	adminH := admin.New(merchantRepo, platformChRepo, orderRepo, refundRepo, notifyLogRepo, cipher, reg, paymentSvc)
+	adminH := admin.New(merchantRepo, platformChRepo, orderRepo, refundRepo, notifyLogRepo, cipher, reg, paymentSvc, settingsRepo)
 	adminAuthH := admin.NewAuthHandler(db, rdb)
 	merchantH := merchant.New(merchantRepo, orderRepo, notifyLogRepo)
 	merchantAuthH := merchant.NewAuthHandler(merchantRepo, rdb)

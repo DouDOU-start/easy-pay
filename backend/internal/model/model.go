@@ -164,3 +164,11 @@ type AdminUser struct {
 }
 
 func (AdminUser) TableName() string { return "admin_users" }
+
+type SystemSetting struct {
+	Key       string    `gorm:"column:key;primaryKey;size:64" json:"key"`
+	Value     string    `gorm:"column:value" json:"value"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (SystemSetting) TableName() string { return "system_settings" }

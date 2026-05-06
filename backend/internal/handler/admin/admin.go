@@ -35,6 +35,7 @@ type Handler struct {
 	cipher      *crypto.AESGCM
 	registry    *registry.Registry
 	paymentSvc  *payment.Service
+	settings    repository.SystemSettingRepo
 }
 
 func New(
@@ -46,6 +47,7 @@ func New(
 	cipher *crypto.AESGCM,
 	reg *registry.Registry,
 	paymentSvc *payment.Service,
+	settings repository.SystemSettingRepo,
 ) *Handler {
 	return &Handler{
 		merchants:   merchants,
@@ -56,6 +58,7 @@ func New(
 		cipher:      cipher,
 		registry:    reg,
 		paymentSvc:  paymentSvc,
+		settings:    settings,
 	}
 }
 
@@ -685,6 +688,41 @@ func HashPassword(pw string) (string, error) {
 	h, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost)
 	return string(h), err
 }
+
+// ---------- System settings ----------
+
+func (h *Handler) GetSettings(c *gin.Context) {
+	list, err := h.settings.GetAll(c.Request.Context())
+	if err != nil {
+		httputil.Fail500(c, "LIST_FAILED", "查询失败，请稍后重试", err)
+		return
+	}
+	m := make(map[string]string, len(list))
+	for _, s := range list {
+		m[s.Key] = s.Value
+	}
+	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": m})
+}
+
+type updateSettingsReq struct {
+	PlatformBase string `json:"platform_base"`
+}
+
+func (h *Handler) UpdateSettings(c *gin.Context) {
+	var req updateSettingsReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "msg": err.Error()})
+		return
+	}
+	val := strings.TrimRight(strings.TrimSpace(req.PlatformBase), "/")
+	if err := h.settings.Set(c.Request.Context(), "platform_base", val); err != nil {
+		httputil.Fail500(c, "SAVE_FAILED", "保存失败，请稍后重试", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": "OK"})
+}
+
+// ---------- helpers ----------
 
 func channelDisplayName(ch model.Channel) string {
 	switch ch {

@@ -111,6 +111,9 @@ func NewRouter(d Deps) *gin.Engine {
 		adminGrp.GET("/notify_logs", d.Admin.ListNotifyLogs)
 		adminGrp.POST("/notify_logs/:id/retry", d.Admin.RetryNotify)
 
+		// System settings
+		adminGrp.GET("/settings", d.Admin.GetSettings)
+		adminGrp.PUT("/settings", d.Admin.UpdateSettings)
 	}
 
 	// ---------- embedded admin SPA ----------

@@ -436,3 +436,39 @@ func (r *notifyLogRepo) List(ctx context.Context, f NotifyLogFilter) ([]*model.N
 	}
 	return list, total, nil
 }
+
+// ---------- SystemSetting ----------
+
+type SystemSettingRepo interface {
+	Get(ctx context.Context, key string) (string, error)
+	Set(ctx context.Context, key, value string) error
+	GetAll(ctx context.Context) ([]*model.SystemSetting, error)
+}
+
+type systemSettingRepo struct{ db *gorm.DB }
+
+func NewSystemSettingRepo(db *gorm.DB) SystemSettingRepo {
+	return &systemSettingRepo{db: db}
+}
+
+func (r *systemSettingRepo) Get(ctx context.Context, key string) (string, error) {
+	var s model.SystemSetting
+	err := r.db.WithContext(ctx).Where(`"key" = ?`, key).First(&s).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", ErrNotFound
+	}
+	return s.Value, err
+}
+
+func (r *systemSettingRepo) Set(ctx context.Context, key, value string) error {
+	return r.db.WithContext(ctx).
+		Where(`"key" = ?`, key).
+		Assign(map[string]any{"value": value, "updated_at": time.Now()}).
+		FirstOrCreate(&model.SystemSetting{Key: key}).Error
+}
+
+func (r *systemSettingRepo) GetAll(ctx context.Context) ([]*model.SystemSetting, error) {
+	var list []*model.SystemSetting
+	err := r.db.WithContext(ctx).Order(`"key" ASC`).Find(&list).Error
+	return list, err
+}

@@ -26,13 +26,15 @@ type Notifier interface {
 	Enqueue(ctx context.Context, merchantID int64, orderNo, eventType string, payload any) error
 }
 
+type PlatformBaseGetter func(ctx context.Context) string
+
 type Service struct {
-	orders   repository.OrderRepo
-	refunds  repository.RefundRepo
-	registry channel.Registry
-	notifier Notifier
-	log      *zap.Logger
-	platformNotifyBase string // e.g. https://api.example.com
+	orders           repository.OrderRepo
+	refunds          repository.RefundRepo
+	registry         channel.Registry
+	notifier         Notifier
+	log              *zap.Logger
+	platformBaseGetter PlatformBaseGetter
 }
 
 func NewService(
@@ -40,7 +42,7 @@ func NewService(
 	refunds repository.RefundRepo,
 	registry channel.Registry,
 	notifier Notifier,
-	platformNotifyBase string,
+	platformBaseGetter PlatformBaseGetter,
 	log *zap.Logger,
 ) *Service {
 	return &Service{
@@ -48,7 +50,7 @@ func NewService(
 		refunds:            refunds,
 		registry:           registry,
 		notifier:           notifier,
-		platformNotifyBase: platformNotifyBase,
+		platformBaseGetter: platformBaseGetter,
 		log:                log,
 	}
 }
@@ -119,7 +121,7 @@ func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*Create
 		return nil, fmt.Errorf("create order: %w", err)
 	}
 
-	notifyURL := fmt.Sprintf("%s/callback/%s/%d", s.platformNotifyBase, in.Channel, in.MerchantID)
+	notifyURL := fmt.Sprintf("%s/callback/%s/%d", s.platformBaseGetter(ctx), in.Channel, in.MerchantID)
 	res, err := ch.Prepay(ctx, channel.PrepayRequest{
 		OrderNo:   orderNo,
 		Subject:   in.Subject,

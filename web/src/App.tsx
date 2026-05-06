@@ -13,6 +13,7 @@ import Merchants from './pages/Merchants'
 import NotifyLogs from './pages/NotifyLogs'
 import Orders from './pages/Orders'
 import PlatformChannels from './pages/PlatformChannels'
+import Settings from './pages/Settings'
 import Setup from './pages/Setup'
 
 const AdminGuard = ({ children }: { children: JSX.Element }) => {
@@ -72,6 +73,7 @@ function AppRoutes() {
           <Route path="orders" element={<Orders />} />
           <Route path="notify-logs" element={<NotifyLogs />} />
           <Route path="platform" element={<PlatformChannels />} />
+          <Route path="settings" element={<Settings />} />
         </Route>
 
         <Route
