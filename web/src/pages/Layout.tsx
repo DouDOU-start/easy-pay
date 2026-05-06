@@ -7,6 +7,7 @@ import {
   LogoutOutlined,
   ApiOutlined,
   SettingOutlined,
+  UserOutlined,
   MenuOutlined,
   CloseOutlined,
 } from '@ant-design/icons'
@@ -16,11 +17,14 @@ import { authApi, clearSession } from '../api'
 const { Sider, Content } = AntLayout
 
 const pageTitles: Record<string, { crumb: string; section: string }> = {
-  '/merchants': { crumb: '商户管理', section: '商户' },
-  '/orders': { crumb: '订单中心', section: '交易' },
-  '/notify-logs': { crumb: '通知日志', section: '监控' },
-  '/platform': { crumb: '渠道凭证', section: '平台' },
-  '/settings': { crumb: '系统设置', section: '平台' },
+  '/merchants': { crumb: '商户管理', section: '管理' },
+  '/orders': { crumb: '订单中心', section: '管理' },
+  '/notify-logs': { crumb: '通知日志', section: '管理' },
+  '/platform': { crumb: '渠道凭证', section: '管理' },
+  '/settings': { crumb: '系统设置', section: '管理' },
+  '/my-orders': { crumb: '我的订单', section: '个人' },
+  '/my-notify-logs': { crumb: '我的通知', section: '个人' },
+  '/my-settings': { crumb: '账户设置', section: '个人' },
 }
 
 function formatNow() {
@@ -56,13 +60,18 @@ export default function Layout() {
   }
 
   const items = [
-    { key: '/merchants', icon: <ShopOutlined />, label: '商户管理' },
-    { key: '/orders', icon: <FileTextOutlined />, label: '订单中心' },
-    { key: '/notify-logs', icon: <BellOutlined />, label: '通知日志' },
-    { key: '/platform', icon: <ApiOutlined />, label: '渠道凭证' },
-    { key: '/settings', icon: <SettingOutlined />, label: '系统设置' },
-    { type: 'divider' as const },
-    { key: '/merchant/orders', icon: <ShopOutlined />, label: '我的商户' },
+    { type: 'group' as const, label: '管理', children: [
+      { key: '/merchants', icon: <ShopOutlined />, label: '商户管理' },
+      { key: '/orders', icon: <FileTextOutlined />, label: '订单中心' },
+      { key: '/notify-logs', icon: <BellOutlined />, label: '通知日志' },
+      { key: '/platform', icon: <ApiOutlined />, label: '渠道凭证' },
+      { key: '/settings', icon: <SettingOutlined />, label: '系统设置' },
+    ]},
+    { type: 'group' as const, label: '个人', children: [
+      { key: '/my-orders', icon: <FileTextOutlined />, label: '我的订单' },
+      { key: '/my-notify-logs', icon: <BellOutlined />, label: '我的通知' },
+      { key: '/my-settings', icon: <UserOutlined />, label: '账户设置' },
+    ]},
   ]
 
   const current = pageTitles[loc.pathname] ?? { crumb: '概览', section: '控制台' }

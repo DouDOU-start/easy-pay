@@ -70,6 +70,9 @@ function AppRoutes() {
           <Route path="notify-logs" element={<NotifyLogs />} />
           <Route path="platform" element={<PlatformChannels />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="my-orders" element={<MerchantOrders />} />
+          <Route path="my-notify-logs" element={<MerchantNotifyLogs />} />
+          <Route path="my-settings" element={<MerchantSettings />} />
         </Route>
 
         {/* Merchant self-service (accessible to all roles) */}
