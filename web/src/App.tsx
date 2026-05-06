@@ -13,6 +13,7 @@ import Orders from './pages/Orders'
 import PlatformChannels from './pages/PlatformChannels'
 import Settings from './pages/Settings'
 import Setup from './pages/Setup'
+import IntegrationDoc from './pages/IntegrationDoc'
 
 const AuthGuard = ({ children, requiredRole }: { children: JSX.Element; requiredRole?: string }) => {
   const token = localStorage.getItem(TOKEN_KEY)
@@ -76,6 +77,9 @@ function AppRoutes() {
           <Route path="my-orders" element={<MerchantOrders />} />
           <Route path="my-notify-logs" element={<MerchantNotifyLogs />} />
           <Route path="my-settings" element={<MerchantSettings />} />
+
+          {/* Docs */}
+          <Route path="docs/integration" element={<IntegrationDoc />} />
         </Route>
       </Routes>
     </SetupGate>

@@ -335,6 +335,35 @@ body {
 }
 
 /* ------------------------------------------------------------------ */
+/*  MAIN (right-side scroll wrapper)                                   */
+/* ------------------------------------------------------------------ */
+
+.ep-main {
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.25) transparent;
+}
+
+.ep-main::-webkit-scrollbar {
+  width: 6px;
+}
+
+.ep-main::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ep-main::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.25);
+  border-radius: 3px;
+}
+
+.ep-main:not(:hover)::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+
+/* ------------------------------------------------------------------ */
 /*  CONTENT                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -345,10 +374,10 @@ body {
   z-index: 2;
   max-width: 1560px;
   width: 100%;
-  height: calc(100vh - 72px);
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
 }
 
 /* Direct children (stat strip, filter bar, page-header, panels…) keep their
@@ -1079,6 +1108,10 @@ textarea.ant-input {
   padding: 28px 32px 30px;
 }
 
+.ep-settings-panel .ant-form-item-control {
+  max-width: 100% !important;
+}
+
 .ep-settings-head {
   display: flex;
   justify-content: space-between;
@@ -1113,27 +1146,27 @@ textarea.ant-input {
 }
 
 /* Readonly display fields */
-.ep-readonly-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0;
+.ep-readonly-list {
+  display: flex;
+  flex-direction: column;
 }
 
 .ep-readonly-field {
-  padding: 14px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
   border-bottom: 1px solid var(--border-hairline);
 }
 
-.ep-readonly-field:nth-last-child(-n+3) {
+.ep-readonly-field:last-child {
   border-bottom: none;
 }
 
 .ep-readonly-label {
-  font-size: 11px;
-  letter-spacing: 0.06em;
+  font-size: 13px;
   color: var(--text-tertiary);
-  text-transform: uppercase;
-  margin-bottom: 6px;
+  flex-shrink: 0;
 }
 
 .ep-readonly-value {
@@ -2332,6 +2365,244 @@ textarea.ant-input {
   .ep-sider-footer {
     padding: 14px 24px 16px;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/*  MARKDOWN DOC                                                       */
+/* ------------------------------------------------------------------ */
+
+.ep-doc {
+  max-width: 860px;
+  padding: 8px 0 64px;
+  opacity: 0;
+  animation: fadeInUp 0.7s ease forwards;
+}
+
+.ep-doc h1 {
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+  line-height: 1.15;
+}
+
+.ep-doc h2 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 400;
+  color: var(--text-primary);
+  margin: 48px 0 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-hairline);
+  position: relative;
+}
+
+.ep-doc h2::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 32px;
+  height: 1px;
+  background: var(--accent-gold);
+}
+
+.ep-doc h3 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 400;
+  color: var(--text-primary);
+  margin: 36px 0 14px;
+}
+
+.ep-doc h4 {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent-gold);
+  letter-spacing: 0.02em;
+  margin: 28px 0 12px;
+}
+
+.ep-doc p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.8;
+  margin: 0 0 16px;
+}
+
+.ep-doc strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.ep-doc hr {
+  border: none;
+  border-top: 1px solid var(--border-hairline);
+  margin: 32px 0;
+}
+
+.ep-doc ul,
+.ep-doc ol {
+  padding-left: 24px;
+  margin: 0 0 16px;
+}
+
+.ep-doc li {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.8;
+  margin-bottom: 4px;
+}
+
+.ep-doc li::marker {
+  color: var(--accent-gold-dim);
+}
+
+/* Checkbox list */
+.ep-doc li input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-deep);
+  vertical-align: middle;
+  margin-right: 8px;
+  position: relative;
+  top: -1px;
+  cursor: default;
+}
+
+.ep-doc li input[type="checkbox"]:checked {
+  border-color: var(--accent-gold);
+  background: rgba(217, 184, 112, 0.15);
+}
+
+.ep-doc li input[type="checkbox"]:checked::after {
+  content: '✓';
+  position: absolute;
+  top: -1px;
+  left: 2px;
+  font-size: 12px;
+  color: var(--accent-gold);
+}
+
+/* Inline code */
+.ep-doc code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--bg-deep);
+  border: 1px solid var(--border-hairline);
+  color: var(--accent-gold);
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+
+/* Code blocks */
+.ep-doc pre {
+  background: var(--bg-deep);
+  border: 1px solid var(--border-hairline);
+  padding: 20px 24px;
+  margin: 0 0 16px;
+  overflow-x: auto;
+  position: relative;
+}
+
+.ep-doc pre::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 20px;
+  width: 24px;
+  height: 1px;
+  background: var(--accent-gold);
+  opacity: 0.6;
+}
+
+.ep-doc pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.65;
+  white-space: pre;
+}
+
+/* Tables */
+.ep-doc table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--border-hairline);
+  margin: 0 0 16px;
+  font-size: 13px;
+}
+
+.ep-doc thead th {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 12px;
+  padding: 10px 16px;
+  text-align: left;
+}
+
+.ep-doc tbody td {
+  border-bottom: 1px solid var(--border-hairline);
+  color: var(--text-primary);
+  padding: 9px 16px;
+}
+
+.ep-doc tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.ep-doc tbody tr:hover td {
+  background: var(--bg-elevated);
+}
+
+.ep-doc tbody td code {
+  font-size: 11px;
+}
+
+/* Blockquote */
+.ep-doc blockquote {
+  margin: 0 0 16px;
+  padding: 14px 20px;
+  background: rgba(217, 184, 112, 0.04);
+  border-left: 2px solid var(--accent-gold);
+}
+
+.ep-doc blockquote p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+/* Links */
+.ep-doc a {
+  color: var(--accent-azure);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.ep-doc a:hover {
+  border-bottom-color: var(--accent-azure);
+}
+
+@media (max-width: 640px) {
+  .ep-doc h1 { font-size: 28px; }
+  .ep-doc h2 { font-size: 20px; margin-top: 36px; }
+  .ep-doc h3 { font-size: 17px; }
+  .ep-doc pre { padding: 14px 16px; }
+  .ep-doc pre code { font-size: 12px; }
+  .ep-doc table { font-size: 12px; }
+  .ep-doc thead th,
+  .ep-doc tbody td { padding: 8px 12px; }
 }
 
 /* QR block */

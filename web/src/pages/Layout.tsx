@@ -10,6 +10,7 @@ import {
   UserOutlined,
   MenuOutlined,
   CloseOutlined,
+  BookOutlined,
 } from '@ant-design/icons'
 import { useEffect, useState } from 'react'
 import { authApi, clearSession, getRole } from '../api'
@@ -25,6 +26,7 @@ const pageTitles: Record<string, { crumb: string; section: string }> = {
   '/my-orders': { crumb: '我的订单', section: '个人' },
   '/my-notify-logs': { crumb: '我的通知', section: '个人' },
   '/my-settings': { crumb: '账户设置', section: '个人' },
+  '/docs/integration': { crumb: '对接文档', section: '文档' },
 }
 
 function formatNow() {
@@ -67,6 +69,10 @@ export default function Layout() {
     { key: '/my-settings', icon: <UserOutlined />, label: '账户设置' },
   ]
 
+  const docItems = [
+    { key: '/docs/integration', icon: <BookOutlined />, label: '对接文档' },
+  ]
+
   const items = isAdmin
     ? [
         { type: 'group' as const, label: '管理', children: [
@@ -77,8 +83,12 @@ export default function Layout() {
           { key: '/settings', icon: <SettingOutlined />, label: '系统设置' },
         ]},
         { type: 'group' as const, label: '个人', children: personalItems },
+        { type: 'group' as const, label: '文档', children: docItems },
       ]
-    : personalItems
+    : [
+        ...personalItems,
+        { type: 'group' as const, label: '文档', children: docItems },
+      ]
 
   const current = pageTitles[loc.pathname] ?? { crumb: '概览', section: '控制台' }
 
@@ -123,7 +133,7 @@ export default function Layout() {
         </div>
       </Sider>
 
-      <AntLayout style={{ background: 'transparent' }}>
+      <AntLayout className="ep-main" style={{ background: 'transparent' }}>
         <div className="ep-header">
           <button
             type="button"

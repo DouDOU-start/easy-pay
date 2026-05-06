@@ -67,7 +67,7 @@ web-build: web-deps
 # via go:embed. After `make build`, running `./bin/easypay` serves both the
 # API and the admin UI on one port — no separate Vite process needed.
 build: web-build
-	CGO_ENABLED=0 go build -o bin/easypay ./backend/cmd/api
+	CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/easypay ./backend/cmd/api
 
 tidy:
 	go mod tidy
