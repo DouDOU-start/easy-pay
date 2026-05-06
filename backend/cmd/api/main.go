@@ -97,7 +97,7 @@ func runNormalMode(cfg *config.Config) {
 	defer logger.Sync()
 
 	// --- infra: db, redis, cipher ---
-	db, err := gorm.Open(postgres.Open(cfg.Database.DSN), &gorm.Config{
+	db, err := gorm.Open(postgres.Open(cfg.Database.DSN()), &gorm.Config{
 		Logger: gormlogger.Default.LogMode(gormlogger.Warn),
 	})
 	if err != nil {

@@ -50,7 +50,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      EASYPAY_DATABASE_DSN: "host=postgres user=easypay password=easypay dbname=easypay port=5432 sslmode=disable TimeZone=Asia/Shanghai"
+      EASYPAY_DATABASE_HOST: postgres
       EASYPAY_REDIS_ADDR: "redis:6379"
       EASYPAY_CRYPTO_KEY: "change-me-please-this-is-32bytes"
     depends_on:

@@ -318,7 +318,12 @@ var configTmpl = template.Must(template.New("config").Parse(`server:
   # platform_base: "https://pay.example.com"
 
 database:
-  dsn: "{{.DSN}}"
+  host: "{{.DBHost}}"
+  port: {{.DBPort}}
+  user: "{{.DBUser}}"
+  password: "{{.DBPassword}}"
+  dbname: "{{.DBName}}"
+  sslmode: "{{.DBSSLMode}}"
   max_idle_conns: 10
   max_open_conns: 100
   log_level: info
@@ -357,8 +362,17 @@ func (h *Handler) writeConfig(req InstallReq, cryptoKey string) error {
 	}
 	defer f.Close()
 
+	sslMode := req.DB.SSLMode
+	if sslMode == "" {
+		sslMode = "disable"
+	}
 	return configTmpl.Execute(f, map[string]any{
-		"DSN":           buildDSN(req.DB),
+		"DBHost":        req.DB.Host,
+		"DBPort":        req.DB.Port,
+		"DBUser":        req.DB.User,
+		"DBPassword":    req.DB.Password,
+		"DBName":        req.DB.DBName,
+		"DBSSLMode":     sslMode,
 		"RedisAddr":     req.Redis.Addr,
 		"RedisPassword": req.Redis.Password,
 		"RedisDB":       req.Redis.DB,

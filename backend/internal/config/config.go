@@ -2,13 +2,12 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/spf13/viper"
-
-	"github.com/easypay/easy-pay/backend/internal/pkg/defaults"
 )
 
 // ErrConfigNotFound is returned by Load when no configuration file can be found.
@@ -32,10 +31,22 @@ type ServerConfig struct {
 }
 
 type DatabaseConfig struct {
-	DSN          string `mapstructure:"dsn"`
+	Host         string `mapstructure:"host"`
+	Port         int    `mapstructure:"port"`
+	User         string `mapstructure:"user"`
+	Password     string `mapstructure:"password"`
+	DBName       string `mapstructure:"dbname"`
+	SSLMode      string `mapstructure:"sslmode"`
 	MaxIdleConns int    `mapstructure:"max_idle_conns"`
 	MaxOpenConns int    `mapstructure:"max_open_conns"`
 	LogLevel     string `mapstructure:"log_level"`
+}
+
+func (d DatabaseConfig) DSN() string {
+	return fmt.Sprintf(
+		"host=%s user=%s password=%s dbname=%s port=%d sslmode=%s TimeZone=Asia/Shanghai",
+		d.Host, d.User, d.Password, d.DBName, d.Port, d.SSLMode,
+	)
 }
 
 type RedisConfig struct {
@@ -75,9 +86,13 @@ func Load(path string) (*Config, error) {
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 
-	d := defaults.Get()
-	v.SetDefault("database.dsn", d.DSN())
-	v.SetDefault("redis.addr", d.RedisAddr)
+	v.SetDefault("database.host", "localhost")
+	v.SetDefault("database.port", 5432)
+	v.SetDefault("database.user", "easypay")
+	v.SetDefault("database.password", "easypay")
+	v.SetDefault("database.dbname", "easypay")
+	v.SetDefault("database.sslmode", "disable")
+	v.SetDefault("redis.addr", "localhost:6379")
 	v.SetDefault("redis.password", "")
 	v.SetDefault("redis.db", 0)
 

@@ -6,7 +6,12 @@ server:
   # platform_base: "https://pay.example.com"
 
 database:
-  dsn: "host=localhost user=easypay password=easypay dbname=easypay port=5432 sslmode=disable TimeZone=Asia/Shanghai"
+  host: localhost
+  port: 5432
+  user: easypay
+  password: easypay
+  dbname: easypay
+  sslmode: disable
   max_idle_conns: 10
   max_open_conns: 100
   log_level: info
