@@ -248,20 +248,23 @@ func (h *Handler) doInstall(ctx context.Context, req InstallReq) error {
 		return fmt.Errorf("数据库迁移失败: %w", err)
 	}
 
-	// 4. Create admin user
+	// 4. Create admin user (as merchant with role='admin')
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Admin.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return fmt.Errorf("密码哈希失败: %w", err)
 	}
+	mchNo := fmt.Sprintf("M%014d", time.Now().UnixNano()%1e14)
+	appID := "ap_" + hex.EncodeToString(randBytes(6))
+	appSecret := hex.EncodeToString(randBytes(32))
 	_, err = db.ExecContext(ctx, `
-		INSERT INTO admin_users (username, password_hash, role, status)
-		VALUES ($1, $2, 'admin', 1)
-		ON CONFLICT (username) DO UPDATE
+		INSERT INTO merchants (name, email, password_hash, password_changed_at, role, status, mch_no, app_id, app_secret)
+		VALUES ($1, $2, $3, NOW(), 'admin', 1, $4, $5, $6)
+		ON CONFLICT (email) WHERE email <> '' DO UPDATE
 		SET password_hash = EXCLUDED.password_hash,
-		    role          = EXCLUDED.role,
-		    status        = EXCLUDED.status,
+		    role          = 'admin',
+		    status        = 1,
 		    updated_at    = NOW()
-	`, req.Admin.Email, string(hash))
+	`, req.Admin.Email, req.Admin.Email, string(hash), mchNo, appID, appSecret)
 	if err != nil {
 		return fmt.Errorf("创建管理员失败: %w", err)
 	}
@@ -461,6 +464,12 @@ func friendlyRedisError(err error) string {
 
 
 // --- helpers ---
+
+func randBytes(n int) []byte {
+	b := make([]byte, n)
+	_, _ = rand.Read(b)
+	return b
+}
 
 func buildDSN(r TestDBReq) string {
 	sslMode := r.SSLMode

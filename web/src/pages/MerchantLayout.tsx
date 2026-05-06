@@ -2,7 +2,7 @@ import { BellOutlined, FileTextOutlined, LogoutOutlined, MenuOutlined, SettingOu
 import { Layout as AntLayout, Menu } from 'antd'
 import { useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { MERCHANT_TOKEN_KEY, merchantApi } from '../api'
+import { api, clearSession, getRole } from '../api'
 
 const { Sider, Content } = AntLayout
 
@@ -38,10 +38,12 @@ export default function MerchantLayout() {
     return () => document.body.classList.remove('ep-nav-locked')
   }, [navOpen])
 
+  const isAdmin = getRole() === 'admin'
+
   const logout = async () => {
-    try { await merchantApi.post('/merchant/logout') } catch {}
-    localStorage.removeItem(MERCHANT_TOKEN_KEY)
-    nav('/merchant-login')
+    try { await api.post('/auth/logout') } catch {}
+    clearSession()
+    nav('/login')
   }
 
   const items = [
@@ -72,6 +74,13 @@ export default function MerchantLayout() {
         <Menu mode="inline" selectedKeys={[loc.pathname]} onClick={(e) => nav(e.key)} items={items} />
 
         <div className="ep-sider-footer">
+          {isAdmin && (
+            <div className="row" style={{ marginBottom: 8 }}>
+              <a onClick={() => nav('/merchants')} style={{ cursor: 'pointer', color: 'var(--accent)' }}>
+                ← 返回管理后台
+              </a>
+            </div>
+          )}
           <div className="row"><ShopOutlined style={{ marginRight: 10 }} />当前视图仅限本人商户</div>
           <div className="row" style={{ marginTop: 6, color: 'var(--text-faint)' }}>资料、账单与通知记录</div>
         </div>

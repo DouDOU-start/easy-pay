@@ -1,30 +1,41 @@
 import axios from 'axios'
 
-export const ADMIN_TOKEN_KEY = 'easypay_token'
-export const MERCHANT_TOKEN_KEY = 'easypay_merchant_token'
+export const TOKEN_KEY = 'easypay_token'
 
-function createAuthedApi(tokenKey: string, loginPath: string) {
-  const client = axios.create({ baseURL: '/' })
+export const api = axios.create({ baseURL: '/' })
 
-  client.interceptors.request.use((cfg) => {
-    const t = localStorage.getItem(tokenKey)
-    if (t) cfg.headers.Authorization = `Bearer ${t}`
-    return cfg
-  })
+api.interceptors.request.use((cfg) => {
+  const t = localStorage.getItem(TOKEN_KEY)
+  if (t) cfg.headers.Authorization = `Bearer ${t}`
+  return cfg
+})
 
-  client.interceptors.response.use(
-    (res) => res,
-    (err) => {
-      if (err.response?.status === 401) {
-        localStorage.removeItem(tokenKey)
-        if (location.pathname !== loginPath) location.href = loginPath
-      }
-      return Promise.reject(err)
-    },
-  )
+api.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err.response?.status === 401) {
+      localStorage.removeItem(TOKEN_KEY)
+      if (location.pathname !== '/login') location.href = '/login'
+    }
+    return Promise.reject(err)
+  },
+)
 
-  return client
+export function getRole(): string | null {
+  try {
+    const raw = localStorage.getItem('easypay_user')
+    if (!raw) return null
+    return JSON.parse(raw).role ?? null
+  } catch {
+    return null
+  }
 }
 
-export const api = createAuthedApi(ADMIN_TOKEN_KEY, '/login')
-export const merchantApi = createAuthedApi(MERCHANT_TOKEN_KEY, '/merchant-login')
+export function setUser(user: { id: number; name: string; email: string; role: string }) {
+  localStorage.setItem('easypay_user', JSON.stringify(user))
+}
+
+export function clearSession() {
+  localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem('easypay_user')
+}

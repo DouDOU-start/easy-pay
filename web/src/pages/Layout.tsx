@@ -11,7 +11,7 @@ import {
   CloseOutlined,
 } from '@ant-design/icons'
 import { useEffect, useState } from 'react'
-import { api } from '../api'
+import { api, clearSession } from '../api'
 
 const { Sider, Content } = AntLayout
 
@@ -50,8 +50,8 @@ export default function Layout() {
   }, [navOpen])
 
   const logout = async () => {
-    try { await api.post('/admin/logout') } catch {}
-    localStorage.removeItem('easypay_token')
+    try { await api.post('/auth/logout') } catch {}
+    clearSession()
     nav('/login')
   }
 
@@ -61,6 +61,8 @@ export default function Layout() {
     { key: '/notify-logs', icon: <BellOutlined />, label: '通知日志' },
     { key: '/platform', icon: <ApiOutlined />, label: '渠道凭证' },
     { key: '/settings', icon: <SettingOutlined />, label: '系统设置' },
+    { type: 'divider' as const },
+    { key: '/merchant/orders', icon: <ShopOutlined />, label: '我的商户' },
   ]
 
   const current = pageTitles[loc.pathname] ?? { crumb: '概览', section: '控制台' }

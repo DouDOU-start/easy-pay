@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { ADMIN_TOKEN_KEY, MERCHANT_TOKEN_KEY } from './api'
+import { TOKEN_KEY, getRole } from './api'
 import Layout from './pages/Layout'
 import Login from './pages/Login'
 import MerchantLayout from './pages/MerchantLayout'
-import MerchantLogin from './pages/MerchantLogin'
 import MerchantNotifyLogs from './pages/MerchantNotifyLogs'
 import MerchantOrders from './pages/MerchantOrders'
 import MerchantSettings from './pages/MerchantSettings'
@@ -16,24 +15,21 @@ import PlatformChannels from './pages/PlatformChannels'
 import Settings from './pages/Settings'
 import Setup from './pages/Setup'
 
-const AdminGuard = ({ children }: { children: JSX.Element }) => {
-  const token = localStorage.getItem(ADMIN_TOKEN_KEY)
-  return token ? children : <Navigate to="/login" replace />
+const AuthGuard = ({ children, requiredRole }: { children: JSX.Element; requiredRole?: string }) => {
+  const token = localStorage.getItem(TOKEN_KEY)
+  if (!token) return <Navigate to="/login" replace />
+  if (requiredRole) {
+    const role = getRole()
+    if (role !== requiredRole) return <Navigate to="/login" replace />
+  }
+  return children
 }
 
-const MerchantGuard = ({ children }: { children: JSX.Element }) => {
-  const token = localStorage.getItem(MERCHANT_TOKEN_KEY)
-  return token ? children : <Navigate to="/merchant-login" replace />
-}
-
-// Checks /setup/status on mount. If setup is required, redirects to /setup.
-// Wraps the entire app so every entry point (login, dashboard, etc.) is covered.
 function SetupGate({ children }: { children: JSX.Element }) {
   const [checking, setChecking] = useState(true)
   const nav = useNavigate()
 
   useEffect(() => {
-    // Skip the check if we're already on /setup
     if (window.location.pathname === '/setup') {
       setChecking(false)
       return
@@ -44,7 +40,7 @@ function SetupGate({ children }: { children: JSX.Element }) {
           nav('/setup', { replace: true })
         }
       })
-      .catch(() => { /* ignore — server may be restarting */ })
+      .catch(() => {})
       .finally(() => setChecking(false))
   }, [nav])
 
@@ -58,14 +54,14 @@ function AppRoutes() {
       <Routes>
         <Route path="/setup" element={<Setup />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/merchant-login" element={<MerchantLogin />} />
 
+        {/* Admin panel */}
         <Route
           path="/"
           element={
-            <AdminGuard>
+            <AuthGuard requiredRole="admin">
               <Layout />
-            </AdminGuard>
+            </AuthGuard>
           }
         >
           <Route index element={<Navigate to="/merchants" replace />} />
@@ -76,12 +72,13 @@ function AppRoutes() {
           <Route path="settings" element={<Settings />} />
         </Route>
 
+        {/* Merchant self-service (accessible to all roles) */}
         <Route
           path="/merchant"
           element={
-            <MerchantGuard>
+            <AuthGuard>
               <MerchantLayout />
-            </MerchantGuard>
+            </AuthGuard>
           }
         >
           <Route index element={<Navigate to="/merchant/orders" replace />} />

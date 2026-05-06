@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/easypay/easy-pay/backend/internal/handler/auth"
 	"github.com/easypay/easy-pay/backend/internal/handler/httputil"
 	"github.com/easypay/easy-pay/backend/internal/model"
 	"github.com/easypay/easy-pay/backend/internal/repository"
@@ -30,7 +31,7 @@ func New(
 // ---------- profile ----------
 
 func (h *Handler) Me(c *gin.Context) {
-	id, err := CurrentMerchantID(c)
+	id, err := auth.CurrentUserID(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"code": "AUTH_FAILED"})
 		return
@@ -45,6 +46,7 @@ func (h *Handler) Me(c *gin.Context) {
 		"mch_no":     m.MchNo,
 		"name":       m.Name,
 		"email":      m.Email,
+		"role":       m.Role,
 		"notify_url": m.NotifyURL,
 		"app_id":     m.AppID,
 		"status":     m.Status,
@@ -57,10 +59,8 @@ type updateProfileReq struct {
 	NotifyURL *string `json:"notify_url"`
 }
 
-// UpdateProfile lets the merchant change its display name and notify URL.
-// Mch_no, email, and app_id are read-only from the merchant side.
 func (h *Handler) UpdateProfile(c *gin.Context) {
-	id, err := CurrentMerchantID(c)
+	id, err := auth.CurrentUserID(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"code": "AUTH_FAILED"})
 		return
@@ -103,7 +103,7 @@ type changePasswordReq struct {
 }
 
 func (h *Handler) ChangePassword(c *gin.Context) {
-	id, err := CurrentMerchantID(c)
+	id, err := auth.CurrentUserID(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"code": "AUTH_FAILED"})
 		return
@@ -143,10 +143,8 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 
 // ---------- bills ----------
 
-// Orders lists only the current merchant's orders. Filter parameters mirror
-// the admin /orders endpoint but the merchant_id is forced to the session.
 func (h *Handler) Orders(c *gin.Context) {
-	id, err := CurrentMerchantID(c)
+	id, err := auth.CurrentUserID(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"code": "AUTH_FAILED"})
 		return
@@ -170,7 +168,7 @@ func (h *Handler) Orders(c *gin.Context) {
 }
 
 func (h *Handler) NotifyLogs(c *gin.Context) {
-	id, err := CurrentMerchantID(c)
+	id, err := auth.CurrentUserID(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"code": "AUTH_FAILED"})
 		return
@@ -193,11 +191,8 @@ func (h *Handler) NotifyLogs(c *gin.Context) {
 	}})
 }
 
-// OrderDetail returns one order, but only if it belongs to the session
-// merchant. 404 is returned for both missing-order and cross-merchant lookups
-// so we never leak the existence of another merchant's order numbers.
 func (h *Handler) OrderDetail(c *gin.Context) {
-	id, err := CurrentMerchantID(c)
+	id, err := auth.CurrentUserID(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"code": "AUTH_FAILED"})
 		return

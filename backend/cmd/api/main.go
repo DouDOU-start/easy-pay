@@ -23,6 +23,7 @@ import (
 	"github.com/easypay/easy-pay/backend/internal/config"
 	"github.com/easypay/easy-pay/backend/internal/handler/admin"
 	"github.com/easypay/easy-pay/backend/internal/handler/api"
+	"github.com/easypay/easy-pay/backend/internal/handler/auth"
 	"github.com/easypay/easy-pay/backend/internal/handler/callback"
 	"github.com/easypay/easy-pay/backend/internal/handler/merchant"
 	"github.com/easypay/easy-pay/backend/internal/pkg/crypto"
@@ -156,10 +157,9 @@ func runNormalMode(cfg *config.Config) {
 	// --- handlers ---
 	paymentH := api.NewPaymentHandler(paymentSvc)
 	callbackH := callback.New(paymentSvc, reg, logger)
+	authH := auth.New(merchantRepo, rdb)
 	adminH := admin.New(merchantRepo, platformChRepo, orderRepo, refundRepo, notifyLogRepo, cipher, reg, paymentSvc, settingsRepo)
-	adminAuthH := admin.NewAuthHandler(db, rdb)
 	merchantH := merchant.New(merchantRepo, orderRepo, notifyLogRepo)
-	merchantAuthH := merchant.NewAuthHandler(merchantRepo, rdb)
 
 	// --- router / server ---
 	gin.SetMode(cfg.Server.Mode)
@@ -171,10 +171,9 @@ func runNormalMode(cfg *config.Config) {
 		MerchantRepo: merchantRepo,
 		Payment:      paymentH,
 		Callback:     callbackH,
+		Auth:         authH,
 		Admin:        adminH,
-		AdminAuth:    adminAuthH,
 		Merchant:     merchantH,
-		MerchantAuth: merchantAuthH,
 		StaticFS:     staticFS,
 	})
 

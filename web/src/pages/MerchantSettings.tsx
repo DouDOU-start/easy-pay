@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button, Form, Input, message } from 'antd'
-import { merchantApi } from '../api'
+import { api } from '../api'
 
 interface MerchantProfile {
   id: number
@@ -21,7 +21,7 @@ export default function MerchantSettings() {
   const [passwordForm] = Form.useForm()
 
   const load = async () => {
-    const { data } = await merchantApi.get('/merchant/me')
+    const { data } = await api.get('/merchant/me')
     const next = data.data as MerchantProfile
     setProfile(next)
     profileForm.setFieldsValue({
@@ -39,7 +39,7 @@ export default function MerchantSettings() {
     const v = await profileForm.validateFields()
     setLoading(true)
     try {
-      await merchantApi.put('/merchant/me', {
+      await api.put('/merchant/me', {
         name: v.name,
         notify_url: v.notify_url ?? '',
       })
@@ -56,7 +56,7 @@ export default function MerchantSettings() {
     const v = await passwordForm.validateFields()
     setPasswordLoading(true)
     try {
-      await merchantApi.put('/merchant/me/password', {
+      await api.put('/merchant/me/password', {
         old_password: v.old_password,
         new_password: v.new_password,
       })

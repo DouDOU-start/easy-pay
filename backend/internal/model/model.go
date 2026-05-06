@@ -53,6 +53,7 @@ type Merchant struct {
 	Email             string     `gorm:"size:128" json:"email"`
 	PasswordHash      string     `gorm:"column:password_hash;size:128" json:"-"`
 	PasswordChangedAt *time.Time `gorm:"column:password_changed_at" json:"password_changed_at"`
+	Role              string     `gorm:"size:16" json:"role"`
 	AppID             string     `gorm:"column:app_id;uniqueIndex;size:64" json:"app_id"`
 	AppSecret         string     `gorm:"column:app_secret;size:128" json:"-"`
 	NotifyURL         string     `gorm:"column:notify_url;size:512" json:"notify_url"`
@@ -61,6 +62,8 @@ type Merchant struct {
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
 }
+
+func (m *Merchant) IsAdmin() bool { return m.Role == "admin" }
 
 func (Merchant) TableName() string { return "merchants" }
 
@@ -153,17 +156,6 @@ type NotifyLog struct {
 
 func (NotifyLog) TableName() string { return "notify_logs" }
 
-type AdminUser struct {
-	ID           int64     `gorm:"primaryKey" json:"id"`
-	Username     string    `gorm:"uniqueIndex;size:64" json:"username"`
-	PasswordHash string    `gorm:"column:password_hash;size:128" json:"-"`
-	Role         string    `gorm:"size:16" json:"role"`
-	Status       int16     `json:"status"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-}
-
-func (AdminUser) TableName() string { return "admin_users" }
 
 type SystemSetting struct {
 	Key       string    `gorm:"column:key;primaryKey;size:64" json:"key"`

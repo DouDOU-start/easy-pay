@@ -1,15 +1,17 @@
 import { Form, Input, Button, message } from 'antd'
 import { useNavigate } from 'react-router-dom'
-import { ADMIN_TOKEN_KEY, api } from '../api'
+import { TOKEN_KEY, api, setUser } from '../api'
 
 export default function Login() {
   const nav = useNavigate()
-  const onFinish = async (v: { username: string; password: string }) => {
+  const onFinish = async (v: { email: string; password: string }) => {
     try {
-      const { data } = await api.post('/admin/login', v)
-      localStorage.setItem(ADMIN_TOKEN_KEY, data.data.token)
+      const { data } = await api.post('/auth/login', v)
+      const { token, user } = data.data
+      localStorage.setItem(TOKEN_KEY, token)
+      setUser(user)
       message.success('登录成功')
-      nav('/merchants')
+      nav(user.role === 'admin' ? '/merchants' : '/merchant/orders')
     } catch (e: any) {
       message.error(e.response?.data?.msg || '登录失败')
     }
@@ -60,15 +62,15 @@ export default function Login() {
           <h2>
             欢迎<em>回来</em>。
           </h2>
-          <p className="sub">登录以进入商户管理台。</p>
+          <p className="sub">管理员与商户统一登录。</p>
 
           <Form
             layout="vertical"
             onFinish={onFinish}
             requiredMark={false}
           >
-            <Form.Item name="username" label="邮箱" rules={[{ required: true, message: '请输入邮箱' }]}>
-              <Input placeholder="admin@example.com" autoComplete="username" />
+            <Form.Item name="email" label="邮箱" rules={[{ required: true, message: '请输入邮箱' }]}>
+              <Input placeholder="you@example.com" autoComplete="username" />
             </Form.Item>
             <Form.Item name="password" label="密码" rules={[{ required: true, message: '请输入密码' }]}>
               <Input.Password placeholder="••••••••" autoComplete="current-password" />
@@ -80,7 +82,7 @@ export default function Login() {
 
           <div className="ep-login-footer">
             <span><span className="dot" />TLS 1.3 加密传输</span>
-            <span>易支付 · 管理台</span>
+            <span>易支付</span>
           </div>
         </div>
       </div>

@@ -9,6 +9,7 @@ import (
 
 	"github.com/easypay/easy-pay/backend/internal/handler/admin"
 	"github.com/easypay/easy-pay/backend/internal/handler/api"
+	"github.com/easypay/easy-pay/backend/internal/handler/auth"
 	"github.com/easypay/easy-pay/backend/internal/handler/callback"
 	"github.com/easypay/easy-pay/backend/internal/handler/merchant"
 	"github.com/easypay/easy-pay/backend/internal/handler/middleware"
@@ -20,12 +21,10 @@ type Deps struct {
 	MerchantRepo repository.MerchantRepo
 	Payment      *api.PaymentHandler
 	Callback     *callback.Handler
+	Auth         *auth.Handler
 	Admin        *admin.Handler
-	AdminAuth    *admin.AuthHandler
 	Merchant     *merchant.Handler
-	MerchantAuth *merchant.AuthHandler
-	// StaticFS serves the embedded admin SPA. When nil, no UI is served.
-	StaticFS fs.FS
+	StaticFS     fs.FS
 }
 
 func NewRouter(d Deps) *gin.Engine {
@@ -36,7 +35,6 @@ func NewRouter(d Deps) *gin.Engine {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
-	// Setup status — in normal mode, setup is already complete.
 	r.GET("/setup/status", setup.StatusCompleted)
 
 	// ---------- downstream payment API ----------
@@ -52,40 +50,29 @@ func NewRouter(d Deps) *gin.Engine {
 	// ---------- provider callbacks ----------
 	r.POST("/callback/:channel/:merchant_id", d.Callback.Receive)
 
-	// ---------- admin: auth (public) ----------
-	adminPub := r.Group("/admin")
+	// ---------- auth (public) ----------
+	r.POST("/auth/login", d.Auth.Login)
+
+	// ---------- authenticated (any role) ----------
+	authed := r.Group("")
+	authed.Use(d.Auth.Middleware())
 	{
-		adminPub.POST("/login", d.AdminAuth.Login)
+		authed.POST("/auth/logout", d.Auth.Logout)
+		authed.GET("/auth/me", d.Auth.Me)
+
+		// Merchant self-service (available to all roles)
+		authed.GET("/merchant/me", d.Merchant.Me)
+		authed.PUT("/merchant/me", d.Merchant.UpdateProfile)
+		authed.PUT("/merchant/me/password", d.Merchant.ChangePassword)
+		authed.GET("/merchant/orders", d.Merchant.Orders)
+		authed.GET("/merchant/orders/:order_no", d.Merchant.OrderDetail)
+		authed.GET("/merchant/notify_logs", d.Merchant.NotifyLogs)
 	}
 
-	// ---------- merchant self-service: auth (public) ----------
-	if d.MerchantAuth != nil && d.Merchant != nil {
-		merchantPub := r.Group("/merchant")
-		{
-			merchantPub.POST("/login", d.MerchantAuth.Login)
-		}
-
-		// ---------- merchant self-service: authenticated ----------
-		merchantGrp := r.Group("/merchant")
-		merchantGrp.Use(d.MerchantAuth.Middleware())
-		{
-			merchantGrp.POST("/logout", d.MerchantAuth.Logout)
-			merchantGrp.GET("/me", d.Merchant.Me)
-			merchantGrp.PUT("/me", d.Merchant.UpdateProfile)
-			merchantGrp.PUT("/me/password", d.Merchant.ChangePassword)
-			merchantGrp.GET("/orders", d.Merchant.Orders)
-			merchantGrp.GET("/orders/:order_no", d.Merchant.OrderDetail)
-			merchantGrp.GET("/notify_logs", d.Merchant.NotifyLogs)
-		}
-	}
-
-	// ---------- admin: authenticated ----------
+	// ---------- admin only ----------
 	adminGrp := r.Group("/admin")
-	adminGrp.Use(d.AdminAuth.Middleware())
+	adminGrp.Use(d.Auth.Middleware(), auth.RequireAdmin())
 	{
-		adminGrp.POST("/logout", d.AdminAuth.Logout)
-		adminGrp.GET("/me", d.AdminAuth.Me)
-
 		// Merchants
 		adminGrp.GET("/merchants", d.Admin.ListMerchants)
 		adminGrp.POST("/merchants", d.Admin.CreateMerchant)
@@ -93,11 +80,11 @@ func NewRouter(d Deps) *gin.Engine {
 		adminGrp.DELETE("/merchants/:id", d.Admin.DeleteMerchant)
 		adminGrp.POST("/merchants/:id/reset-password", d.Admin.ResetMerchantPassword)
 
-		// Merchant channel authorisation (no credentials — just enable/disable)
+		// Merchant channel authorisation
 		adminGrp.GET("/merchants/:id/channels", d.Admin.ListMerchantChannels)
 		adminGrp.PUT("/merchants/:id/channels/:channel", d.Admin.UpsertMerchantChannel)
 
-		// Platform channel credentials (system-level, shared by all merchants)
+		// Platform channel credentials
 		adminGrp.GET("/platform/channels", d.Admin.ListPlatformChannels)
 		adminGrp.GET("/platform/channels/:channel", d.Admin.GetPlatformChannel)
 		adminGrp.PUT("/platform/channels/:channel", d.Admin.UpsertPlatformChannel)
@@ -116,7 +103,7 @@ func NewRouter(d Deps) *gin.Engine {
 		adminGrp.PUT("/settings", d.Admin.UpdateSettings)
 	}
 
-	// ---------- embedded admin SPA ----------
+	// ---------- embedded SPA ----------
 	if d.StaticFS != nil {
 		r.NoRoute(SpaHandler(d.StaticFS))
 	}
@@ -124,9 +111,6 @@ func NewRouter(d Deps) *gin.Engine {
 	return r
 }
 
-// SpaHandler serves the embedded admin bundle. Static assets that exist in the
-// FS are returned as-is; unknown paths fall through to index.html so that
-// client-side routing works on deep links.
 func SpaHandler(static fs.FS) gin.HandlerFunc {
 	fileServer := http.FileServer(http.FS(static))
 	indexBytes, _ := fs.ReadFile(static, "index.html")
@@ -136,6 +120,7 @@ func SpaHandler(static fs.FS) gin.HandlerFunc {
 		if strings.HasPrefix(p, "/api/") ||
 			strings.HasPrefix(p, "/admin/") ||
 			strings.HasPrefix(p, "/merchant/") ||
+			strings.HasPrefix(p, "/auth/") ||
 			strings.HasPrefix(p, "/callback/") ||
 			strings.HasPrefix(p, "/setup/") {
 			c.Status(http.StatusNotFound)
