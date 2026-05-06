@@ -66,7 +66,7 @@ func Load(path string) (*Config, error) {
 	} else {
 		v.SetConfigName("config")
 		v.SetConfigType("yaml")
-		v.AddConfigPath("./backend/configs")
+		v.AddConfigPath("./backend")
 		v.AddConfigPath("./configs")
 		v.AddConfigPath(".")
 	}

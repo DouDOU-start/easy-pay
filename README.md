@@ -17,7 +17,7 @@
 easy-pay/
 ├── backend/
 │   ├── cmd/api/              # 服务入口
-│   ├── configs/              # 配置文件（config.example.yaml）
+│   ├── config.example.yaml   # 配置模板
 │   ├── internal/
 │   │   ├── config/           # 配置加载（viper）
 │   │   ├── model/            # GORM 模型
@@ -51,9 +51,9 @@ easy-pay/
 
 ## 配置
 
-所有配置统一在 `backend/configs/config.yaml`（由首装向导自动生成，已 gitignore）。
+所有配置统一在 `backend/config.yaml`（由首装向导自动生成，已 gitignore）。
 
-参考模板：`backend/configs/config.example.yaml`。
+参考模板：`backend/config.example.yaml`。
 
 ## 快速开始
 

@@ -12,7 +12,7 @@ dev: web-ensure
 	@echo ""
 	@trap 'kill 0' INT TERM; \
 		( while true; do \
-			go run ./backend/cmd/api --config backend/configs/config.yaml 2>&1 | sed -u 's/^/[api] /'; \
+			go run ./backend/cmd/api --config backend/config.yaml 2>&1 | sed -u 's/^/[api] /'; \
 			echo "[api] exited, restarting in 1s..."; \
 			sleep 1; \
 		done ) & \
@@ -35,7 +35,7 @@ infra-down:
 
 # Run only the Go API (if you want the frontend in its own terminal).
 run:
-	go run ./backend/cmd/api --config backend/configs/config.yaml
+	go run ./backend/cmd/api --config backend/config.yaml
 
 # Run only the React UI.
 web:

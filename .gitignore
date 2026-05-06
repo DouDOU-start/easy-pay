@@ -3,7 +3,7 @@ bin/
 *.test
 *.out
 # 运行时配置由首装向导生成，不入库
-backend/configs/config.yaml
+backend/config.yaml
 .vscode/
 .idea/
 *.swp

@@ -10,6 +10,6 @@ RUN apk add --no-cache ca-certificates tzdata
 ENV TZ=Asia/Shanghai
 WORKDIR /app
 COPY --from=builder /out/easypay /app/easypay
-COPY backend/configs /app/configs
+COPY backend/config.yaml /app/config.yaml
 EXPOSE 8080
-ENTRYPOINT ["/app/easypay", "--config", "/app/configs/config.yaml"]
+ENTRYPOINT ["/app/easypay", "--config", "/app/config.yaml"]

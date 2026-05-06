@@ -344,7 +344,7 @@ log:
 func (h *Handler) writeConfig(req InstallReq, cryptoKey string) error {
 	path := h.configPath
 	if path == "" {
-		path = "backend/configs/config.yaml"
+		path = "backend/config.yaml"
 	}
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
