@@ -20,6 +20,7 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 
 	"github.com/easypay/easy-pay/backend/internal/channel/registry"
+	"github.com/easypay/easy-pay/backend/migrations"
 	"github.com/easypay/easy-pay/backend/internal/config"
 	"github.com/easypay/easy-pay/backend/internal/handler/admin"
 	"github.com/easypay/easy-pay/backend/internal/handler/api"
@@ -106,6 +107,9 @@ func runNormalMode(cfg *config.Config) {
 		logger.Fatal("open db", zap.Error(err))
 	}
 	sqlDB, _ := db.DB()
+	if err := migrations.Run(context.Background(), sqlDB); err != nil {
+		logger.Fatal("run migrations", zap.Error(err))
+	}
 	sqlDB.SetMaxIdleConns(cfg.Database.MaxIdleConns)
 	sqlDB.SetMaxOpenConns(cfg.Database.MaxOpenConns)
 

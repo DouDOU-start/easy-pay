@@ -6,11 +6,9 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
-	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"text/template"
@@ -244,7 +242,7 @@ func (h *Handler) doInstall(ctx context.Context, req InstallReq) error {
 	}
 
 	// 3. Run migrations
-	if err := runMigrations(ctx, db); err != nil {
+	if err := migrations.Run(ctx, db); err != nil {
 		return fmt.Errorf("数据库迁移失败: %w", err)
 	}
 
@@ -280,34 +278,6 @@ func (h *Handler) doInstall(ctx context.Context, req InstallReq) error {
 		return fmt.Errorf("写入配置文件失败: %w", err)
 	}
 
-	return nil
-}
-
-// --- migrations ---
-
-func runMigrations(ctx context.Context, db *sql.DB) error {
-	entries, err := fs.ReadDir(migrations.SQLFiles, ".")
-	if err != nil {
-		return err
-	}
-
-	var names []string
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".sql") {
-			names = append(names, e.Name())
-		}
-	}
-	sort.Strings(names)
-
-	for _, name := range names {
-		data, err := fs.ReadFile(migrations.SQLFiles, name)
-		if err != nil {
-			return fmt.Errorf("read %s: %w", name, err)
-		}
-		if _, err := db.ExecContext(ctx, string(data)); err != nil {
-			return fmt.Errorf("exec %s: %w", name, err)
-		}
-	}
 	return nil
 }
 
