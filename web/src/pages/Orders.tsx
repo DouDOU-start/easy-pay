@@ -276,7 +276,25 @@ export default function Orders() {
             title: '状态',
             dataIndex: 'status',
             width: 130,
-            render: (s: string) => <Tag color={statusColor[s] || 'default'}>{statusLabel[s] || s}</Tag>,
+            render: (s: string, row: any) => {
+              if (s === 'pending' && (row.code_url || row.h5_url)) {
+                return (
+                  <Tag
+                    color={statusColor[s]}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => setCreated({
+                      order_no: row.order_no,
+                      merchant_order_no: row.merchant_order_no,
+                      code_url: row.code_url ?? '',
+                      h5_url: row.h5_url ?? '',
+                    })}
+                  >
+                    {statusLabel[s]}
+                  </Tag>
+                )
+              }
+              return <Tag color={statusColor[s] || 'default'}>{statusLabel[s] || s}</Tag>
+            },
           },
           {
             title: '渠道单号',
@@ -350,11 +368,12 @@ export default function Orders() {
       </Modal>
 
       <Modal
-        title="下单成功"
+        title="支付信息"
         open={!!created}
         onCancel={() => setCreated(null)}
         footer={<Button onClick={() => setCreated(null)}>关闭</Button>}
         width={520}
+        centered
       >
         {created && (
           <div>
