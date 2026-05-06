@@ -10,7 +10,7 @@ export default function Login() {
       localStorage.setItem(TOKEN_KEY, token)
       setUser(user)
       message.success('登录成功')
-      nav(user.role === 'admin' ? '/merchants' : '/merchant/orders')
+      nav(user.role === 'admin' ? '/merchants' : '/my-orders')
     } catch (e: any) {
       message.error(e.response?.data?.msg || '登录失败')
     }

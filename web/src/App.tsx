@@ -4,7 +4,6 @@ import axios from 'axios'
 import { TOKEN_KEY, getRole } from './api'
 import Layout from './pages/Layout'
 import Login from './pages/Login'
-import MerchantLayout from './pages/MerchantLayout'
 import MerchantNotifyLogs from './pages/MerchantNotifyLogs'
 import MerchantOrders from './pages/MerchantOrders'
 import MerchantSettings from './pages/MerchantSettings'
@@ -55,43 +54,37 @@ function AppRoutes() {
         <Route path="/setup" element={<Setup />} />
         <Route path="/login" element={<Login />} />
 
-        {/* Admin panel */}
         <Route
           path="/"
           element={
-            <AuthGuard requiredRole="admin">
+            <AuthGuard>
               <Layout />
             </AuthGuard>
           }
         >
-          <Route index element={<Navigate to="/merchants" replace />} />
+          {/* Default redirect based on role */}
+          <Route index element={<RoleRedirect />} />
+
+          {/* Admin management */}
           <Route path="merchants" element={<Merchants />} />
           <Route path="orders" element={<Orders />} />
           <Route path="notify-logs" element={<NotifyLogs />} />
           <Route path="platform" element={<PlatformChannels />} />
           <Route path="settings" element={<Settings />} />
+
+          {/* Personal (all roles) */}
           <Route path="my-orders" element={<MerchantOrders />} />
           <Route path="my-notify-logs" element={<MerchantNotifyLogs />} />
           <Route path="my-settings" element={<MerchantSettings />} />
         </Route>
-
-        {/* Merchant self-service (accessible to all roles) */}
-        <Route
-          path="/merchant"
-          element={
-            <AuthGuard>
-              <MerchantLayout />
-            </AuthGuard>
-          }
-        >
-          <Route index element={<Navigate to="/merchant/orders" replace />} />
-          <Route path="orders" element={<MerchantOrders />} />
-          <Route path="notify-logs" element={<MerchantNotifyLogs />} />
-          <Route path="settings" element={<MerchantSettings />} />
-        </Route>
       </Routes>
     </SetupGate>
   )
+}
+
+function RoleRedirect() {
+  const role = getRole()
+  return <Navigate to={role === 'admin' ? '/merchants' : '/my-orders'} replace />
 }
 
 export default function App() {

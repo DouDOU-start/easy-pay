@@ -12,7 +12,7 @@ import {
   CloseOutlined,
 } from '@ant-design/icons'
 import { useEffect, useState } from 'react'
-import { authApi, clearSession } from '../api'
+import { authApi, clearSession, getRole } from '../api'
 
 const { Sider, Content } = AntLayout
 
@@ -59,20 +59,26 @@ export default function Layout() {
     nav('/login')
   }
 
-  const items = [
-    { type: 'group' as const, label: '管理', children: [
-      { key: '/merchants', icon: <ShopOutlined />, label: '商户管理' },
-      { key: '/orders', icon: <FileTextOutlined />, label: '订单中心' },
-      { key: '/notify-logs', icon: <BellOutlined />, label: '通知日志' },
-      { key: '/platform', icon: <ApiOutlined />, label: '渠道凭证' },
-      { key: '/settings', icon: <SettingOutlined />, label: '系统设置' },
-    ]},
-    { type: 'group' as const, label: '个人', children: [
-      { key: '/my-orders', icon: <FileTextOutlined />, label: '我的订单' },
-      { key: '/my-notify-logs', icon: <BellOutlined />, label: '我的通知' },
-      { key: '/my-settings', icon: <UserOutlined />, label: '账户设置' },
-    ]},
+  const isAdmin = getRole() === 'admin'
+
+  const personalItems = [
+    { key: '/my-orders', icon: <FileTextOutlined />, label: '我的订单' },
+    { key: '/my-notify-logs', icon: <BellOutlined />, label: '我的通知' },
+    { key: '/my-settings', icon: <UserOutlined />, label: '账户设置' },
   ]
+
+  const items = isAdmin
+    ? [
+        { type: 'group' as const, label: '管理', children: [
+          { key: '/merchants', icon: <ShopOutlined />, label: '商户管理' },
+          { key: '/orders', icon: <FileTextOutlined />, label: '订单中心' },
+          { key: '/notify-logs', icon: <BellOutlined />, label: '通知日志' },
+          { key: '/platform', icon: <ApiOutlined />, label: '渠道凭证' },
+          { key: '/settings', icon: <SettingOutlined />, label: '系统设置' },
+        ]},
+        { type: 'group' as const, label: '个人', children: personalItems },
+      ]
+    : personalItems
 
   const current = pageTitles[loc.pathname] ?? { crumb: '概览', section: '控制台' }
 
@@ -86,10 +92,10 @@ export default function Layout() {
 
       <Sider className="ep-sider" width={260}>
         <div className="ep-brand">
-          <div className="ep-brand-mark">ep</div>
+          <div className="ep-brand-mark">{isAdmin ? 'ep' : 'mc'}</div>
           <div className="ep-brand-text">
-            <span className="wordmark">易支付</span>
-            <span className="caption">支付管理平台 · v0.1</span>
+            <span className="wordmark">{isAdmin ? '易支付' : '商户中心'}</span>
+            <span className="caption">{isAdmin ? '支付管理平台 · v0.1' : '易支付 · self-service'}</span>
           </div>
           <button
             type="button"
