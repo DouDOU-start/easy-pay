@@ -127,7 +127,7 @@ export default function MerchantSettings() {
         </div>
         <Form form={passwordForm} layout="vertical" requiredMark={false}>
           <Form.Item name="old_password" label="旧密码" rules={[{ required: true, message: '请输入旧密码' }]}>
-            <Input.Password placeholder="当前密码" autoComplete="off" />
+            <Input.Password placeholder="当前密码" autoComplete="nope" />
           </Form.Item>
           <Form.Item
             name="new_password"
@@ -138,7 +138,7 @@ export default function MerchantSettings() {
               { max: 72, message: '密码不能超过 72 位' },
             ]}
           >
-            <Input.Password placeholder="至少 8 位" autoComplete="new-password" />
+            <Input.Password placeholder="至少 8 位" autoComplete="nope" />
           </Form.Item>
           <Form.Item
             name="confirm_password"
@@ -154,7 +154,7 @@ export default function MerchantSettings() {
               }),
             ]}
           >
-            <Input.Password placeholder="再次输入" autoComplete="new-password" />
+            <Input.Password placeholder="再次输入" autoComplete="nope" />
           </Form.Item>
           <div className="ep-panel-actions">
             <Button type="primary" onClick={changePassword} loading={passwordLoading}>更新密码</Button>

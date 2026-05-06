@@ -69,10 +69,10 @@ export default function Login() {
             requiredMark={false}
           >
             <Form.Item name="email" label="邮箱" rules={[{ required: true, message: '请输入邮箱' }]}>
-              <Input placeholder="you@example.com" autoComplete="off" />
+              <Input placeholder="you@example.com" autoComplete="nope" />
             </Form.Item>
             <Form.Item name="password" label="密码" rules={[{ required: true, message: '请输入密码' }]}>
-              <Input.Password placeholder="••••••••" autoComplete="off" />
+              <Input.Password placeholder="••••••••" autoComplete="nope" />
             </Form.Item>
             <Button type="primary" htmlType="submit" block>
               登 录
