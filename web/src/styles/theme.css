@@ -1069,6 +1069,12 @@ textarea.ant-input {
   align-items: start;
 }
 
+.ep-settings-col-main {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
 .ep-settings-panel {
   padding: 28px 32px 30px;
 }
@@ -1076,9 +1082,11 @@ textarea.ant-input {
 .ep-settings-head {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 16px;
   margin-bottom: 22px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-hairline);
 }
 
 .ep-settings-kicker {
@@ -1092,7 +1100,7 @@ textarea.ant-input {
 .ep-settings-head h3 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 400;
   color: var(--text-primary);
 }
@@ -1102,6 +1110,52 @@ textarea.ant-input {
   color: var(--text-tertiary);
   line-height: 1.6;
   text-align: right;
+}
+
+/* Readonly display fields */
+.ep-readonly-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+}
+
+.ep-readonly-field {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.ep-readonly-field:nth-last-child(-n+3) {
+  border-bottom: none;
+}
+
+.ep-readonly-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.ep-readonly-value {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  word-break: break-all;
+}
+
+.ep-readonly-copy {
+  font-size: 12px;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: color 0.2s;
+  flex-shrink: 0;
+}
+
+.ep-readonly-copy:hover {
+  color: var(--accent-gold);
 }
 
 .ep-form-grid {

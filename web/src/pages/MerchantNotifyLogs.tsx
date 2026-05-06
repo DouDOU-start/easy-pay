@@ -29,7 +29,7 @@ export default function MerchantNotifyLogs() {
     const params: Record<string, any> = { page, size }
     if (orderNo.trim()) params.order_no = orderNo.trim()
     if (status) params.status = status
-    const { data } = await api.get('/merchant/notify_logs', { params })
+    const { data } = await api.get('/api/merchant/notify_logs', { params })
     setList(data.data.list ?? [])
     setTotal(data.data.total ?? 0)
   }

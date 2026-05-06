@@ -45,7 +45,7 @@ export default function MerchantOrders() {
     const params: Record<string, any> = { page, size }
     if (status) params.status = status
     if (channel) params.channel = channel
-    const { data } = await api.get('/merchant/orders', { params })
+    const { data } = await api.get('/api/merchant/orders', { params })
     setList(data.data.list ?? [])
     setTotal(data.data.total ?? 0)
   }

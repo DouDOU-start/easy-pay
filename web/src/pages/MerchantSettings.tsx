@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Button, Form, Input, message } from 'antd'
+import { Button, Form, Input, message, Tag } from 'antd'
+import { CopyOutlined } from '@ant-design/icons'
 import { api } from '../api'
 
 interface MerchantProfile {
@@ -13,6 +14,24 @@ interface MerchantProfile {
   created_at: string
 }
 
+function copyText(text: string) {
+  navigator.clipboard.writeText(text).then(() => message.success('已复制'))
+}
+
+function ReadonlyField({ label, value }: { label: string; value?: string }) {
+  return (
+    <div className="ep-readonly-field">
+      <div className="ep-readonly-label">{label}</div>
+      <div className="ep-readonly-value">
+        <span>{value || '-'}</span>
+        {value && (
+          <CopyOutlined className="ep-readonly-copy" onClick={() => copyText(value)} />
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function MerchantSettings() {
   const [loading, setLoading] = useState(false)
   const [passwordLoading, setPasswordLoading] = useState(false)
@@ -21,15 +40,12 @@ export default function MerchantSettings() {
   const [passwordForm] = Form.useForm()
 
   const load = async () => {
-    const { data } = await api.get('/merchant/me')
+    const { data } = await api.get('/api/merchant/me')
     const next = data.data as MerchantProfile
     setProfile(next)
     profileForm.setFieldsValue({
       name: next.name,
       notify_url: next.notify_url,
-      email: next.email,
-      mch_no: next.mch_no,
-      app_id: next.app_id,
     })
   }
 
@@ -39,7 +55,7 @@ export default function MerchantSettings() {
     const v = await profileForm.validateFields()
     setLoading(true)
     try {
-      await api.put('/merchant/me', {
+      await api.put('/api/merchant/me', {
         name: v.name,
         notify_url: v.notify_url ?? '',
       })
@@ -56,7 +72,7 @@ export default function MerchantSettings() {
     const v = await passwordForm.validateFields()
     setPasswordLoading(true)
     try {
-      await api.put('/merchant/me/password', {
+      await api.put('/api/merchant/me/password', {
         old_password: v.old_password,
         new_password: v.new_password,
       })
@@ -74,64 +90,59 @@ export default function MerchantSettings() {
       <div className="ep-page-header">
         <div className="col-title">
           <div className="eyebrow">Profile</div>
-          <h1>商户资料支持直接修改<em>名称</em>。</h1>
-          <div className="subtitle">这里维护商户展示名称、通知地址和登录密码。邮箱、商户号与应用 ID 由平台分配，不在商户端开放修改。</div>
+          <h1>商户<em>设置</em></h1>
         </div>
       </div>
 
       <div className="ep-settings-grid">
-        <section className="ep-panel ep-settings-panel">
-          <div className="ep-settings-head">
-            <div>
-              <div className="ep-settings-kicker">资料</div>
+        <div className="ep-settings-col-main">
+          <section className="ep-panel ep-settings-panel">
+            <div className="ep-settings-head">
               <h3>基础信息</h3>
+              <Tag color={profile?.status === 1 ? 'success' : 'default'}>
+                {profile?.status === 1 ? '启用' : '停用'}
+              </Tag>
             </div>
-            <div className="ep-settings-hint">当前状态：{profile?.status === 1 ? '启用' : '停用'}</div>
-          </div>
 
-          <Form form={profileForm} layout="vertical" requiredMark={false}>
-            <div className="ep-form-grid ep-form-grid--2">
-              <Form.Item name="mch_no" label="商户号">
-                <Input disabled />
-              </Form.Item>
-              <Form.Item name="app_id" label="应用 ID">
-                <Input disabled />
-              </Form.Item>
+            <div className="ep-readonly-grid">
+              <ReadonlyField label="商户号" value={profile?.mch_no} />
+              <ReadonlyField label="应用 ID" value={profile?.app_id} />
+              <ReadonlyField label="登录邮箱" value={profile?.email} />
             </div>
-            <div className="ep-form-grid ep-form-grid--2">
-              <Form.Item name="email" label="登录邮箱">
-                <Input disabled />
-              </Form.Item>
-              <Form.Item
-                name="name"
-                label="商户名称"
-                rules={[{ required: true, message: '请输入商户名称' }]}
-                extra="这里的名称可以修改，会同步显示到后台商户列表和订单页。"
-              >
-                <Input placeholder="请输入商户展示名称" />
-              </Form.Item>
+          </section>
+
+          <section className="ep-panel ep-settings-panel">
+            <div className="ep-settings-head">
+              <h3>可编辑信息</h3>
             </div>
-            <Form.Item name="notify_url" label="下游 Notify URL" extra="留空表示暂不配置回调地址。">
-              <Input placeholder="https://your-service/callback" />
-            </Form.Item>
-            <div className="ep-panel-actions">
-              <Button type="primary" onClick={saveProfile} loading={loading}>保存资料</Button>
-            </div>
-          </Form>
-        </section>
+            <Form form={profileForm} layout="vertical" requiredMark={false}>
+              <div className="ep-form-grid ep-form-grid--2">
+                <Form.Item
+                  name="name"
+                  label="商户名称"
+                  rules={[{ required: true, message: '请输入商户名称' }]}
+                >
+                  <Input placeholder="请输入商户展示名称" />
+                </Form.Item>
+                <Form.Item name="notify_url" label="Notify URL">
+                  <Input placeholder="https://your-service/callback" />
+                </Form.Item>
+              </div>
+              <div className="ep-panel-actions">
+                <Button type="primary" onClick={saveProfile} loading={loading}>保存</Button>
+              </div>
+            </Form>
+          </section>
+        </div>
 
         <section className="ep-panel ep-settings-panel">
           <div className="ep-settings-head">
-            <div>
-              <div className="ep-settings-kicker">Security</div>
-              <h3>修改密码</h3>
-            </div>
-            <div className="ep-settings-hint">建议首次登录后立即更换初始密码</div>
+            <h3>修改密码</h3>
           </div>
 
           <Form form={passwordForm} layout="vertical" requiredMark={false}>
             <Form.Item name="old_password" label="旧密码" rules={[{ required: true, message: '请输入旧密码' }]}>
-              <Input.Password placeholder="请输入当前密码" autoComplete="current-password" />
+              <Input.Password placeholder="当前密码" autoComplete="current-password" />
             </Form.Item>
             <Form.Item
               name="new_password"
@@ -142,7 +153,7 @@ export default function MerchantSettings() {
                 { max: 72, message: '密码不能超过 72 位' },
               ]}
             >
-              <Input.Password placeholder="请输入新密码" autoComplete="new-password" />
+              <Input.Password placeholder="至少 8 位" autoComplete="new-password" />
             </Form.Item>
             <Form.Item
               name="confirm_password"
@@ -158,7 +169,7 @@ export default function MerchantSettings() {
                 }),
               ]}
             >
-              <Input.Password placeholder="请再次输入新密码" autoComplete="new-password" />
+              <Input.Password placeholder="再次输入" autoComplete="new-password" />
             </Form.Item>
             <div className="ep-panel-actions">
               <Button type="primary" onClick={changePassword} loading={passwordLoading}>更新密码</Button>

@@ -61,12 +61,12 @@ func NewRouter(d Deps) *gin.Engine {
 		authed.GET("/auth/me", d.Auth.Me)
 
 		// Merchant self-service (available to all roles)
-		authed.GET("/merchant/me", d.Merchant.Me)
-		authed.PUT("/merchant/me", d.Merchant.UpdateProfile)
-		authed.PUT("/merchant/me/password", d.Merchant.ChangePassword)
-		authed.GET("/merchant/orders", d.Merchant.Orders)
-		authed.GET("/merchant/orders/:order_no", d.Merchant.OrderDetail)
-		authed.GET("/merchant/notify_logs", d.Merchant.NotifyLogs)
+		authed.GET("/api/merchant/me", d.Merchant.Me)
+		authed.PUT("/api/merchant/me", d.Merchant.UpdateProfile)
+		authed.PUT("/api/merchant/me/password", d.Merchant.ChangePassword)
+		authed.GET("/api/merchant/orders", d.Merchant.Orders)
+		authed.GET("/api/merchant/orders/:order_no", d.Merchant.OrderDetail)
+		authed.GET("/api/merchant/notify_logs", d.Merchant.NotifyLogs)
 	}
 
 	// ---------- admin only ----------
@@ -119,7 +119,6 @@ func SpaHandler(static fs.FS) gin.HandlerFunc {
 		p := c.Request.URL.Path
 		if strings.HasPrefix(p, "/api/") ||
 			strings.HasPrefix(p, "/admin/") ||
-			strings.HasPrefix(p, "/merchant/") ||
 			strings.HasPrefix(p, "/auth/") ||
 			strings.HasPrefix(p, "/callback/") ||
 			strings.HasPrefix(p, "/setup/") {

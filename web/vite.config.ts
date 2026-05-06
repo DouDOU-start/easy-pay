@@ -13,12 +13,12 @@ export default defineConfig({
       interval: 300,
     },
     proxy: {
+      '/api': 'http://localhost:8080',
       '/auth': 'http://localhost:8080',
       '/admin': 'http://localhost:8080',
       '/setup/': 'http://localhost:8080',
-      '/merchant/': 'http://localhost:8080',
       '/callback': 'http://localhost:8080',
-      '/api': 'http://localhost:8080',
+      '/health': 'http://localhost:8080',
     },
   },
 })
