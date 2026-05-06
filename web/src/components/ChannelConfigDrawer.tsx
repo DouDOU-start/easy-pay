@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Drawer, Switch, Tag, Divider, message, Alert, Empty, Spin } from 'antd'
-import { api } from '../api'
+import { adminApi } from '../api'
 
 interface Props {
   merchantId: number | null
@@ -33,14 +33,14 @@ export default function ChannelConfigDrawer({ merchantId, merchantName, open, on
     if (!merchantId) return
     setLoading(true)
     try {
-      const [mRes, pRes] = await Promise.all([
-        api.get(`/admin/merchants/${merchantId}/channels`),
-        api.get('/admin/platform/channels'),
+      const [mList, pList] = await Promise.all([
+        adminApi.listMerchantChannels(merchantId),
+        adminApi.listPlatformChannels(),
       ])
       const map: Record<string, ChannelRow> = {}
-      for (const row of (mRes.data.data ?? []) as ChannelRow[]) map[row.channel] = row
+      for (const row of (mList ?? []) as unknown as ChannelRow[]) map[row.channel] = row
       setMerchantChs(map)
-      setPlatformChs((pRes.data.data ?? []).filter((p: PlatformChannel) => p.status === 1 && p.configured))
+      setPlatformChs((pList ?? []).filter((p: PlatformChannel) => p.status === 1 && p.configured))
     } catch {
       setMerchantChs({})
       setPlatformChs([])
@@ -57,7 +57,7 @@ export default function ChannelConfigDrawer({ merchantId, merchantName, open, on
     if (!merchantId) return
     setSaving(ch)
     try {
-      await api.put(`/admin/merchants/${merchantId}/channels/${ch}`, {
+      await adminApi.upsertMerchantChannel(merchantId, ch, {
         status: enabled ? 1 : 0,
       })
       message.success(`${channelLabel[ch] ?? ch} ${enabled ? '已启用' : '已停用'}`)

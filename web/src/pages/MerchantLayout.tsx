@@ -2,7 +2,7 @@ import { BellOutlined, FileTextOutlined, LogoutOutlined, MenuOutlined, SettingOu
 import { Layout as AntLayout, Menu } from 'antd'
 import { useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { api, clearSession, getRole } from '../api'
+import { authApi, clearSession, getRole } from '../api'
 
 const { Sider, Content } = AntLayout
 
@@ -41,7 +41,7 @@ export default function MerchantLayout() {
   const isAdmin = getRole() === 'admin'
 
   const logout = async () => {
-    try { await api.post('/auth/logout') } catch {}
+    try { await authApi.logout() } catch {}
     clearSession()
     nav('/login')
   }

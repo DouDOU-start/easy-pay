@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Table, Tag, Select, Input, Button, Modal, Form, InputNumber, message, Typography, Tooltip } from 'antd'
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import { QRCodeSVG } from 'qrcode.react'
-import { api } from '../api'
+import { adminApi } from '../api'
 
 const { Text, Paragraph } = Typography
 
@@ -67,15 +67,13 @@ export default function Orders() {
   const [form] = Form.useForm()
 
   const load = async () => {
-    const { data } = await api.get('/admin/orders', {
-      params: { page, size, ...filter },
-    })
-    setList(data.data.list)
-    setTotal(data.data.total)
+    const result = await adminApi.listOrders({ page, size, ...filter })
+    setList(result.list)
+    setTotal(result.total)
   }
   const loadMerchants = async () => {
-    const { data } = await api.get('/admin/merchants', { params: { page: 1, size: 500 } })
-    setMerchants(data.data.list)
+    const result = await adminApi.listMerchants({ page: 1, size: 500 })
+    setMerchants(result.list)
   }
   useEffect(() => { load() }, [page, filter])
   useEffect(() => { loadMerchants() }, [])
@@ -89,8 +87,8 @@ export default function Orders() {
   const channelLabel: Record<string, string> = { wechat: '微信支付', alipay: '支付宝' }
 
   const loadMerchantChannels = async (merchantId: number) => {
-    const { data } = await api.get(`/admin/merchants/${merchantId}/channels`)
-    const enabled = (data.data || []).filter((c: any) => c.status === 1)
+    const channels = await adminApi.listMerchantChannels(merchantId)
+    const enabled = (channels || []).filter((c: any) => c.status === 1)
     setMerchantChannels(enabled)
     return enabled
   }
@@ -123,8 +121,8 @@ export default function Orders() {
     const v = await form.validateFields()
     setCreating(true)
     try {
-      const { data } = await api.post('/admin/orders/test', v)
-      setCreated(data.data)
+      const result = await adminApi.createTestOrder(v)
+      setCreated(result as CreatedOrder)
       setCreateOpen(false)
       message.success('下单成功')
       load()

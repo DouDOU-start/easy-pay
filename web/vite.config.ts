@@ -4,19 +4,15 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: true, // bind on 0.0.0.0 so Windows host can reach WSL2 services
+    host: true,
     port: 5173,
-    // WSL2 + /mnt/e (NTFS) doesn't deliver reliable inotify events,
-    // so tell chokidar to poll for changes.
     watch: {
       usePolling: true,
       interval: 300,
     },
     proxy: {
       '/api': 'http://localhost:8080',
-      '/auth': 'http://localhost:8080',
-      '/admin': 'http://localhost:8080',
-      '/setup/': 'http://localhost:8080',
+      '/setup': 'http://localhost:8080',
       '/callback': 'http://localhost:8080',
       '/health': 'http://localhost:8080',
     },

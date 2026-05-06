@@ -37,68 +37,67 @@ func NewRouter(d Deps) *gin.Engine {
 
 	r.GET("/setup/status", setup.StatusCompleted)
 
-	// ---------- downstream payment API ----------
-	apiGrp := r.Group("/api/v1/pay")
-	apiGrp.Use(middleware.MerchantAuth(d.MerchantRepo))
-	{
-		apiGrp.POST("/create", d.Payment.Create)
-		apiGrp.GET("/query", d.Payment.Query)
-		apiGrp.POST("/close", d.Payment.Close)
-		apiGrp.POST("/refund", d.Payment.Refund)
-	}
-
 	// ---------- provider callbacks ----------
 	r.POST("/callback/:channel/:merchant_id", d.Callback.Receive)
 
-	// ---------- auth (public) ----------
-	r.POST("/auth/login", d.Auth.Login)
+	// ---------- all API under /api ----------
 
-	// ---------- authenticated (any role) ----------
-	authed := r.Group("")
+	// Auth (public)
+	authGrp := r.Group("/api/auth")
+	{
+		authGrp.POST("/login", d.Auth.Login)
+	}
+
+	// Downstream payment API (merchant HMAC auth)
+	payGrp := r.Group("/api/v1/pay")
+	payGrp.Use(middleware.MerchantAuth(d.MerchantRepo))
+	{
+		payGrp.POST("/create", d.Payment.Create)
+		payGrp.GET("/query", d.Payment.Query)
+		payGrp.POST("/close", d.Payment.Close)
+		payGrp.POST("/refund", d.Payment.Refund)
+	}
+
+	// Authenticated (any role)
+	authed := r.Group("/api")
 	authed.Use(d.Auth.Middleware())
 	{
 		authed.POST("/auth/logout", d.Auth.Logout)
 		authed.GET("/auth/me", d.Auth.Me)
 
-		// Merchant self-service (available to all roles)
-		authed.GET("/api/merchant/me", d.Merchant.Me)
-		authed.PUT("/api/merchant/me", d.Merchant.UpdateProfile)
-		authed.PUT("/api/merchant/me/password", d.Merchant.ChangePassword)
-		authed.GET("/api/merchant/orders", d.Merchant.Orders)
-		authed.GET("/api/merchant/orders/:order_no", d.Merchant.OrderDetail)
-		authed.GET("/api/merchant/notify_logs", d.Merchant.NotifyLogs)
+		// Merchant self-service
+		authed.GET("/merchant/me", d.Merchant.Me)
+		authed.PUT("/merchant/me", d.Merchant.UpdateProfile)
+		authed.PUT("/merchant/me/password", d.Merchant.ChangePassword)
+		authed.GET("/merchant/orders", d.Merchant.Orders)
+		authed.GET("/merchant/orders/:order_no", d.Merchant.OrderDetail)
+		authed.GET("/merchant/notify_logs", d.Merchant.NotifyLogs)
 	}
 
-	// ---------- admin only ----------
-	adminGrp := r.Group("/admin")
+	// Admin only
+	adminGrp := r.Group("/api/admin")
 	adminGrp.Use(d.Auth.Middleware(), auth.RequireAdmin())
 	{
-		// Merchants
 		adminGrp.GET("/merchants", d.Admin.ListMerchants)
 		adminGrp.POST("/merchants", d.Admin.CreateMerchant)
 		adminGrp.PUT("/merchants/:id", d.Admin.UpdateMerchant)
 		adminGrp.DELETE("/merchants/:id", d.Admin.DeleteMerchant)
 		adminGrp.POST("/merchants/:id/reset-password", d.Admin.ResetMerchantPassword)
 
-		// Merchant channel authorisation
 		adminGrp.GET("/merchants/:id/channels", d.Admin.ListMerchantChannels)
 		adminGrp.PUT("/merchants/:id/channels/:channel", d.Admin.UpsertMerchantChannel)
 
-		// Platform channel credentials
 		adminGrp.GET("/platform/channels", d.Admin.ListPlatformChannels)
 		adminGrp.GET("/platform/channels/:channel", d.Admin.GetPlatformChannel)
 		adminGrp.PUT("/platform/channels/:channel", d.Admin.UpsertPlatformChannel)
 
-		// Orders & utilities
 		adminGrp.GET("/orders", d.Admin.ListOrders)
 		adminGrp.POST("/orders/test", d.Admin.TestCreateOrder)
 		adminGrp.POST("/wechat/parse-cert", d.Admin.ParseWechatCert)
 
-		// Notify logs
 		adminGrp.GET("/notify_logs", d.Admin.ListNotifyLogs)
 		adminGrp.POST("/notify_logs/:id/retry", d.Admin.RetryNotify)
 
-		// System settings
 		adminGrp.GET("/settings", d.Admin.GetSettings)
 		adminGrp.PUT("/settings", d.Admin.UpdateSettings)
 	}
@@ -118,8 +117,6 @@ func SpaHandler(static fs.FS) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		p := c.Request.URL.Path
 		if strings.HasPrefix(p, "/api/") ||
-			strings.HasPrefix(p, "/admin/") ||
-			strings.HasPrefix(p, "/auth/") ||
 			strings.HasPrefix(p, "/callback/") ||
 			strings.HasPrefix(p, "/setup/") {
 			c.Status(http.StatusNotFound)

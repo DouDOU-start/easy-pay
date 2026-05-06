@@ -4,7 +4,7 @@ import {
 } from 'antd'
 import { SettingOutlined, UploadOutlined } from '@ant-design/icons'
 import type { UploadProps } from 'antd'
-import { api } from '../api'
+import { adminApi } from '../api'
 
 interface PlatformChannel {
   id: number
@@ -39,8 +39,8 @@ export default function PlatformChannels() {
 
   const load = async () => {
     try {
-      const { data } = await api.get('/admin/platform/channels')
-      setList(data.data ?? [])
+      const result = await adminApi.listPlatformChannels()
+      setList(result ?? [])
     } catch {
       setList([])
     }
@@ -49,9 +49,9 @@ export default function PlatformChannels() {
   const loadChannelConfig = async (ch: 'wechat' | 'alipay') => {
     const form = ch === 'wechat' ? wechatForm : alipayForm
     try {
-      const { data } = await api.get(`/admin/platform/channels/${ch}`)
-      if (!data.data) return
-      form.setFieldsValue(data.data.config ?? {})
+      const result = await adminApi.getPlatformChannel(ch) as any
+      if (!result) return
+      form.setFieldsValue(result.config ?? {})
     } catch {
       // no prior config — leave the form empty
     }
@@ -72,7 +72,7 @@ export default function PlatformChannels() {
     const v = await wechatForm.validateFields()
     setSaving(true)
     try {
-      await api.put('/admin/platform/channels/wechat', {
+      await adminApi.upsertPlatformChannel('wechat', {
         config: {
           mch_id: v.mch_id.trim(),
           app_id: v.app_id.trim(),
@@ -96,7 +96,7 @@ export default function PlatformChannels() {
     const v = await alipayForm.validateFields()
     setSaving(true)
     try {
-      await api.put('/admin/platform/channels/alipay', {
+      await adminApi.upsertPlatformChannel('alipay', {
         config: {
           app_id: v.app_id.trim(),
           private_key: v.private_key,
@@ -160,14 +160,14 @@ export default function PlatformChannels() {
     }
     if (content.includes('BEGIN CERTIFICATE')) {
       try {
-        const { data } = await api.post('/admin/wechat/parse-cert', { pem: content })
-        wechatForm.setFieldValue('serial_no', data.data.serial_no)
-        if (data.data.subject && /^\d{8,16}$/.test(data.data.subject)) {
+        const certInfo = await adminApi.parseWechatCert(content)
+        wechatForm.setFieldValue('serial_no', certInfo.serial_no)
+        if (certInfo.subject && /^\d{8,16}$/.test(certInfo.subject)) {
           if (!wechatForm.getFieldValue('mch_id')) {
-            wechatForm.setFieldValue('mch_id', data.data.subject)
+            wechatForm.setFieldValue('mch_id', certInfo.subject)
           }
         }
-        return `商户证书 → serial_no (${String(data.data.serial_no).slice(0, 12)}…)`
+        return `商户证书 → serial_no (${String(certInfo.serial_no).slice(0, 12)}…)`
       } catch (e: any) {
         message.error('证书解析失败: ' + (e.response?.data?.msg ?? e.message))
         return ''

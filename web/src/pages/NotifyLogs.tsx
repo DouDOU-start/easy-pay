@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Table, Tag, Input, Button, Select, message, Tooltip } from 'antd'
 import { SearchOutlined, RedoOutlined } from '@ant-design/icons'
-import { api } from '../api'
+import { adminApi } from '../api'
 
 const statusColor: Record<string, string> = {
   pending: 'orange',
@@ -29,9 +29,9 @@ export default function NotifyLogs() {
     const params: Record<string, any> = { page, size }
     if (orderNo.trim()) params.order_no = orderNo.trim()
     if (status) params.status = status
-    const { data } = await api.get('/admin/notify_logs', { params })
-    setList(data.data.list ?? [])
-    setTotal(data.data.total ?? 0)
+    const result = await adminApi.listNotifyLogs(params)
+    setList(result.list ?? [])
+    setTotal(result.total ?? 0)
   }
 
   useEffect(() => { load() }, [page, status])
@@ -48,7 +48,7 @@ export default function NotifyLogs() {
   }
 
   const retry = async (id: number) => {
-    await api.post(`/admin/notify_logs/${id}/retry`)
+    await adminApi.retryNotify(id)
     message.success('已标记重试')
     load()
   }

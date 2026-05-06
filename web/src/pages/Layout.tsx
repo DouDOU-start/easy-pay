@@ -11,7 +11,7 @@ import {
   CloseOutlined,
 } from '@ant-design/icons'
 import { useEffect, useState } from 'react'
-import { api, clearSession } from '../api'
+import { authApi, clearSession } from '../api'
 
 const { Sider, Content } = AntLayout
 
@@ -50,7 +50,7 @@ export default function Layout() {
   }, [navOpen])
 
   const logout = async () => {
-    try { await api.post('/auth/logout') } catch {}
+    try { await authApi.logout() } catch {}
     clearSession()
     nav('/login')
   }

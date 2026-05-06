@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button, Select, Table, Tag, Tooltip } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
-import { api } from '../api'
+import { merchantApi } from '../api'
 
 const statusColor: Record<string, string> = {
   pending: 'orange',
@@ -45,9 +45,9 @@ export default function MerchantOrders() {
     const params: Record<string, any> = { page, size }
     if (status) params.status = status
     if (channel) params.channel = channel
-    const { data } = await api.get('/api/merchant/orders', { params })
-    setList(data.data.list ?? [])
-    setTotal(data.data.total ?? 0)
+    const result = await merchantApi.listOrders(params)
+    setList(result.list ?? [])
+    setTotal(result.total ?? 0)
   }
 
   useEffect(() => { load() }, [page, status, channel])

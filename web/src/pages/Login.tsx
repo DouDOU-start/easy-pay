@@ -1,13 +1,12 @@
 import { Form, Input, Button, message } from 'antd'
 import { useNavigate } from 'react-router-dom'
-import { TOKEN_KEY, api, setUser } from '../api'
+import { TOKEN_KEY, authApi, setUser } from '../api'
 
 export default function Login() {
   const nav = useNavigate()
   const onFinish = async (v: { email: string; password: string }) => {
     try {
-      const { data } = await api.post('/auth/login', v)
-      const { token, user } = data.data
+      const { token, user } = await authApi.login(v.email, v.password)
       localStorage.setItem(TOKEN_KEY, token)
       setUser(user)
       message.success('登录成功')

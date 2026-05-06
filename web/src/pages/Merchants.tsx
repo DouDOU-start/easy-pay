@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Table, Button, Modal, Form, Input, Select, Switch, Space, Tag, message, Typography } from 'antd'
 import { PlusOutlined, SettingOutlined, EditOutlined, SearchOutlined, CopyOutlined, KeyOutlined, DeleteOutlined } from '@ant-design/icons'
-import { api } from '../api'
+import { adminApi } from '../api'
 import ChannelConfigDrawer from '../components/ChannelConfigDrawer'
 
 interface Merchant {
@@ -90,9 +90,9 @@ export default function Merchants() {
     const params: Record<string, any> = { page, size }
     if (keyword.trim()) params.keyword = keyword.trim()
     if (status !== undefined) params.status = status
-    const { data } = await api.get('/admin/merchants', { params })
-    setList(data.data.list)
-    setTotal(data.data.total)
+    const result = await adminApi.listMerchants(params)
+    setList(result.list)
+    setTotal(result.total)
   }
   useEffect(() => { load() }, [page, status])
 
@@ -109,8 +109,7 @@ export default function Merchants() {
 
   const create = async () => {
     const v = await createForm.validateFields()
-    const { data } = await api.post('/admin/merchants', v)
-    const d = data.data
+    const d = await adminApi.createMerchant(v) as any
     const copyAll = () => {
       const text = `邮箱: ${d.email}\n初始密码: ${d.password}\n商户号: ${d.mch_no}\napp_id: ${d.app_id}\napp_secret: ${d.app_secret}`
       navigator.clipboard.writeText(text).then(() => message.success('全部信息已复制'))
@@ -171,8 +170,7 @@ export default function Merchants() {
       cancelText: '取消',
       okButtonProps: { danger: true },
       onOk: async () => {
-        const { data } = await api.post(`/admin/merchants/${m.id}/reset-password`)
-        const d = data.data
+        const d = await adminApi.resetMerchantPassword(m.id)
         const copyAll = () => {
           const text = `邮箱: ${d.email}\n新密码: ${d.password}`
           navigator.clipboard.writeText(text).then(() => message.success('已复制'))
@@ -226,7 +224,7 @@ export default function Merchants() {
     if (!deleteTarget || !deleteCodeMatched) return
     setDeleting(true)
     try {
-      await api.delete(`/admin/merchants/${deleteTarget.id}`)
+      await adminApi.deleteMerchant(deleteTarget.id)
       message.success(`商户 ${deleteTarget.mch_no} 已删除`)
       closeDelete()
       setEditTarget(null)
@@ -252,7 +250,7 @@ export default function Merchants() {
     if (!editTarget) return
     const v = await editForm.validateFields()
     try {
-      await api.put(`/admin/merchants/${editTarget.id}`, {
+      await adminApi.updateMerchant(editTarget.id, {
         name: v.name,
         notify_url: v.notify_url ?? '',
         remark: v.remark ?? '',

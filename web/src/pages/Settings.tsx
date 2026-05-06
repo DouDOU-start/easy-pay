@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Form, Input, Button, message, Alert } from 'antd'
-import { api } from '../api'
+import { adminApi } from '../api'
 
 export default function Settings() {
   const [form] = Form.useForm()
@@ -8,9 +8,9 @@ export default function Settings() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    api.get('/admin/settings')
-      .then(({ data }) => {
-        form.setFieldsValue({ platform_base: data.data?.platform_base ?? '' })
+    adminApi.getSettings()
+      .then((settings) => {
+        form.setFieldsValue({ platform_base: settings?.platform_base ?? '' })
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -20,7 +20,7 @@ export default function Settings() {
     const vals = await form.validateFields()
     setSaving(true)
     try {
-      await api.put('/admin/settings', { platform_base: vals.platform_base })
+      await adminApi.updateSettings({ platform_base: vals.platform_base })
       message.success('设置已保存')
     } catch (e: any) {
       message.error(e.response?.data?.msg ?? '保存失败')

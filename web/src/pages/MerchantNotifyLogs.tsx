@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Button, Input, Select, Table, Tag, Tooltip } from 'antd'
 import { RedoOutlined, SearchOutlined } from '@ant-design/icons'
-import { api } from '../api'
+import { merchantApi } from '../api'
 
 const statusColor: Record<string, string> = {
   pending: 'orange',
@@ -29,9 +29,9 @@ export default function MerchantNotifyLogs() {
     const params: Record<string, any> = { page, size }
     if (orderNo.trim()) params.order_no = orderNo.trim()
     if (status) params.status = status
-    const { data } = await api.get('/api/merchant/notify_logs', { params })
-    setList(data.data.list ?? [])
-    setTotal(data.data.total ?? 0)
+    const result = await merchantApi.listNotifyLogs(params)
+    setList(result.list ?? [])
+    setTotal(result.total ?? 0)
   }
 
   useEffect(() => { load() }, [page, status])
