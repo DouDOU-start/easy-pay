@@ -21,13 +21,13 @@ function copyText(text: string) {
 function ReadonlyField({ label, value }: { label: string; value?: string }) {
   return (
     <div className="ep-readonly-field">
-      <div className="ep-readonly-label">{label}</div>
-      <div className="ep-readonly-value">
+      <span className="ep-readonly-label">{label}</span>
+      <span className="ep-readonly-value">
         <span>{value || '-'}</span>
         {value && (
           <CopyOutlined className="ep-readonly-copy" onClick={() => copyText(value)} />
         )}
-      </div>
+      </span>
     </div>
   )
 }
@@ -85,7 +85,7 @@ export default function MerchantSettings() {
   }
 
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div style={{ width: '100%', maxWidth: 820, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
       <section className="ep-panel ep-settings-panel">
         <div className="ep-settings-head">
           <h3>基础信息</h3>
@@ -93,7 +93,7 @@ export default function MerchantSettings() {
             {profile?.status === 1 ? '启用' : '停用'}
           </Tag>
         </div>
-        <div className="ep-readonly-grid" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+        <div className="ep-readonly-list">
           <ReadonlyField label="商户号" value={profile?.mch_no} />
           <ReadonlyField label="应用 ID" value={profile?.app_id} />
           <ReadonlyField label="登录邮箱" value={profile?.email} />
@@ -127,7 +127,7 @@ export default function MerchantSettings() {
         </div>
         <Form form={passwordForm} layout="vertical" requiredMark={false}>
           <Form.Item name="old_password" label="旧密码" rules={[{ required: true, message: '请输入旧密码' }]}>
-            <Input.Password placeholder="当前密码" autoComplete="current-password" />
+            <Input.Password placeholder="当前密码" autoComplete="off" />
           </Form.Item>
           <Form.Item
             name="new_password"
