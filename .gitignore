@@ -2,11 +2,8 @@ bin/
 *.exe
 *.test
 *.out
-.env
-.env.local
-
 # 运行时配置由首装向导生成，不入库
-configs/config.yaml
+backend/configs/config.yaml
 .vscode/
 .idea/
 *.swp
