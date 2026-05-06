@@ -51,9 +51,7 @@ export default function MerchantNotifyLogs() {
     <>
       <div className="ep-page-header">
         <div className="col-title">
-          <div className="eyebrow">Notify</div>
-          <h1>只看当前商户自己的<em>回调记录</em>。</h1>
-          <div className="subtitle">按平台订单号和投递状态过滤，方便核对下游通知是否成功送达。</div>
+          <h1>我的通知</h1>
         </div>
       </div>
 

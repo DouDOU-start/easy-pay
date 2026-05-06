@@ -88,8 +88,7 @@ export default function MerchantSettings() {
     <>
       <div className="ep-page-header">
         <div className="col-title">
-          <div className="eyebrow">Profile</div>
-          <h1>商户<em>设置</em></h1>
+          <h1>账户设置</h1>
         </div>
       </div>
 

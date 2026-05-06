@@ -68,9 +68,7 @@ export default function MerchantOrders() {
     <>
       <div className="ep-page-header">
         <div className="col-title">
-          <div className="eyebrow">Bills</div>
-          <h1>只看属于<em>当前商户</em>的订单。</h1>
-          <div className="subtitle">账单列表自动按登录商户隔离，无法查看其他商户的订单与交易状态。</div>
+          <h1>我的订单</h1>
         </div>
       </div>
 
