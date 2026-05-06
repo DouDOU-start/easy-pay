@@ -85,91 +85,82 @@ export default function MerchantSettings() {
   }
 
   return (
-    <>
-
-      <div className="ep-settings-grid">
-        <div className="ep-settings-col-main">
-          <section className="ep-panel ep-settings-panel">
-            <div className="ep-settings-head">
-              <h3>基础信息</h3>
-              <Tag color={profile?.status === 1 ? 'success' : 'default'}>
-                {profile?.status === 1 ? '启用' : '停用'}
-              </Tag>
-            </div>
-
-            <div className="ep-readonly-grid">
-              <ReadonlyField label="商户号" value={profile?.mch_no} />
-              <ReadonlyField label="应用 ID" value={profile?.app_id} />
-              <ReadonlyField label="登录邮箱" value={profile?.email} />
-            </div>
-          </section>
-
-          <section className="ep-panel ep-settings-panel">
-            <div className="ep-settings-head">
-              <h3>可编辑信息</h3>
-            </div>
-            <Form form={profileForm} layout="vertical" requiredMark={false}>
-              <div className="ep-form-grid ep-form-grid--2">
-                <Form.Item
-                  name="name"
-                  label="商户名称"
-                  rules={[{ required: true, message: '请输入商户名称' }]}
-                >
-                  <Input placeholder="请输入商户展示名称" />
-                </Form.Item>
-                <Form.Item name="notify_url" label="Notify URL">
-                  <Input placeholder="https://your-service/callback" />
-                </Form.Item>
-              </div>
-              <div className="ep-panel-actions">
-                <Button type="primary" onClick={saveProfile} loading={loading}>保存</Button>
-              </div>
-            </Form>
-          </section>
+    <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <section className="ep-panel ep-settings-panel">
+        <div className="ep-settings-head">
+          <h3>基础信息</h3>
+          <Tag color={profile?.status === 1 ? 'success' : 'default'}>
+            {profile?.status === 1 ? '启用' : '停用'}
+          </Tag>
         </div>
+        <div className="ep-readonly-grid" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+          <ReadonlyField label="商户号" value={profile?.mch_no} />
+          <ReadonlyField label="应用 ID" value={profile?.app_id} />
+          <ReadonlyField label="登录邮箱" value={profile?.email} />
+        </div>
+      </section>
 
-        <section className="ep-panel ep-settings-panel">
-          <div className="ep-settings-head">
-            <h3>修改密码</h3>
+      <section className="ep-panel ep-settings-panel">
+        <div className="ep-settings-head">
+          <h3>商户资料</h3>
+        </div>
+        <Form form={profileForm} layout="vertical" requiredMark={false}>
+          <Form.Item
+            name="name"
+            label="商户名称"
+            rules={[{ required: true, message: '请输入商户名称' }]}
+          >
+            <Input placeholder="请输入商户展示名称" />
+          </Form.Item>
+          <Form.Item name="notify_url" label="通知地址">
+            <Input placeholder="https://your-service/callback" />
+          </Form.Item>
+          <div className="ep-panel-actions">
+            <Button type="primary" onClick={saveProfile} loading={loading}>保存</Button>
           </div>
+        </Form>
+      </section>
 
-          <Form form={passwordForm} layout="vertical" requiredMark={false}>
-            <Form.Item name="old_password" label="旧密码" rules={[{ required: true, message: '请输入旧密码' }]}>
-              <Input.Password placeholder="当前密码" autoComplete="current-password" />
-            </Form.Item>
-            <Form.Item
-              name="new_password"
-              label="新密码"
-              rules={[
-                { required: true, message: '请输入新密码' },
-                { min: 8, message: '密码至少 8 位' },
-                { max: 72, message: '密码不能超过 72 位' },
-              ]}
-            >
-              <Input.Password placeholder="至少 8 位" autoComplete="new-password" />
-            </Form.Item>
-            <Form.Item
-              name="confirm_password"
-              label="确认新密码"
-              dependencies={['new_password']}
-              rules={[
-                { required: true, message: '请再次输入新密码' },
-                ({ getFieldValue }) => ({
-                  validator(_, value) {
-                    if (!value || getFieldValue('new_password') === value) return Promise.resolve()
-                    return Promise.reject(new Error('两次输入的密码不一致'))
-                  },
-                }),
-              ]}
-            >
-              <Input.Password placeholder="再次输入" autoComplete="new-password" />
-            </Form.Item>
-            <div className="ep-panel-actions">
-              <Button type="primary" onClick={changePassword} loading={passwordLoading}>更新密码</Button>
-            </div>
-          </Form>
-        </section>
-      </div>
-    </>
+      <section className="ep-panel ep-settings-panel">
+        <div className="ep-settings-head">
+          <h3>修改密码</h3>
+        </div>
+        <Form form={passwordForm} layout="vertical" requiredMark={false}>
+          <Form.Item name="old_password" label="旧密码" rules={[{ required: true, message: '请输入旧密码' }]}>
+            <Input.Password placeholder="当前密码" autoComplete="current-password" />
+          </Form.Item>
+          <Form.Item
+            name="new_password"
+            label="新密码"
+            rules={[
+              { required: true, message: '请输入新密码' },
+              { min: 8, message: '密码至少 8 位' },
+              { max: 72, message: '密码不能超过 72 位' },
+            ]}
+          >
+            <Input.Password placeholder="至少 8 位" autoComplete="new-password" />
+          </Form.Item>
+          <Form.Item
+            name="confirm_password"
+            label="确认新密码"
+            dependencies={['new_password']}
+            rules={[
+              { required: true, message: '请再次输入新密码' },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue('new_password') === value) return Promise.resolve()
+                  return Promise.reject(new Error('两次输入的密码不一致'))
+                },
+              }),
+            ]}
+          >
+            <Input.Password placeholder="再次输入" autoComplete="new-password" />
+          </Form.Item>
+          <div className="ep-panel-actions">
+            <Button type="primary" onClick={changePassword} loading={passwordLoading}>更新密码</Button>
+          </div>
+        </Form>
+      </section>
+    </div>
   )
 }
