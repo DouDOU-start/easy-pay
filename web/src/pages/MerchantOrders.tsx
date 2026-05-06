@@ -66,11 +66,6 @@ export default function MerchantOrders() {
 
   return (
     <>
-      <div className="ep-page-header">
-        <div className="col-title">
-          <h1>我的订单</h1>
-        </div>
-      </div>
 
       <div className="ep-stat-strip">
         <div className="ep-stat">

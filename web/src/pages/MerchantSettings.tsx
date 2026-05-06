@@ -86,11 +86,6 @@ export default function MerchantSettings() {
 
   return (
     <>
-      <div className="ep-page-header">
-        <div className="col-title">
-          <h1>账户设置</h1>
-        </div>
-      </div>
 
       <div className="ep-settings-grid">
         <div className="ep-settings-col-main">

@@ -49,11 +49,6 @@ export default function MerchantNotifyLogs() {
 
   return (
     <>
-      <div className="ep-page-header">
-        <div className="col-title">
-          <h1>我的通知</h1>
-        </div>
-      </div>
 
       <div className="ep-filter-bar">
         <span className="ep-filter-label">筛选</span>
