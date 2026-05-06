@@ -60,6 +60,7 @@ export default function Orders() {
   const [filter, setFilter] = useState<{ status?: string; channel?: string; merchant_id?: string }>({})
 
   const [merchants, setMerchants] = useState<Merchant[]>([])
+  const [merchantChannels, setMerchantChannels] = useState<{ channel: string; status: number }[]>([])
   const [createOpen, setCreateOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [created, setCreated] = useState<CreatedOrder | null>(null)
@@ -85,11 +86,31 @@ export default function Orders() {
     return m
   }, [merchants])
 
+  const channelLabel: Record<string, string> = { wechat: '微信支付', alipay: '支付宝' }
+
+  const loadMerchantChannels = async (merchantId: number) => {
+    const { data } = await api.get(`/admin/merchants/${merchantId}/channels`)
+    const enabled = (data.data || []).filter((c: any) => c.status === 1)
+    setMerchantChannels(enabled)
+    return enabled
+  }
+
+  const onMerchantChange = async (merchantId: number) => {
+    form.setFieldsValue({ channel: undefined, trade_type: undefined })
+    setMerchantChannels([])
+    if (merchantId) {
+      const chs = await loadMerchantChannels(merchantId)
+      if (chs.length === 1) {
+        form.setFieldsValue({ channel: chs[0].channel })
+      }
+    }
+  }
+
   const openCreate = async () => {
     if (merchants.length === 0) await loadMerchants()
     form.resetFields()
+    setMerchantChannels([])
     form.setFieldsValue({
-      channel: 'wechat',
       trade_type: 'native',
       amount: 1,
       subject: 'easy-pay 测试订单',
@@ -288,19 +309,22 @@ export default function Orders() {
         confirmLoading={creating}
         okText="提交下单"
         cancelText="取消"
+        centered
       >
         <Form form={form} layout="vertical" requiredMark={false}>
           <Form.Item name="merchant_id" label="商户" rules={[{ required: true }]}>
             <Select
               placeholder="选择商户"
               options={merchants.map((m) => ({ value: m.id, label: `${m.mch_no} · ${m.name}` }))}
+              onChange={onMerchantChange}
             />
           </Form.Item>
           <Form.Item name="channel" label="渠道" rules={[{ required: true }]}>
-            <Select options={[
-              { value: 'wechat', label: '微信支付' },
-              { value: 'alipay', label: '支付宝（占位）' },
-            ]} />
+            <Select
+              placeholder={form.getFieldValue('merchant_id') ? '选择渠道' : '请先选择商户'}
+              disabled={merchantChannels.length === 0}
+              options={merchantChannels.map((c) => ({ value: c.channel, label: channelLabel[c.channel] || c.channel }))}
+            />
           </Form.Item>
           <Form.Item name="trade_type" label="下单类型" rules={[{ required: true }]}>
             <Select options={[

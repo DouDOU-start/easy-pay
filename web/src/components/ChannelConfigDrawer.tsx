@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Drawer, Form, Switch, Button, Tag, Divider, message, Alert } from 'antd'
+import { Drawer, Switch, Tag, Divider, message, Alert, Empty, Spin } from 'antd'
 import { api } from '../api'
 
 interface Props {
@@ -10,33 +10,42 @@ interface Props {
 }
 
 interface ChannelRow {
-  id: number
-  channel: 'wechat' | 'alipay'
+  channel: string
   status: number
   updated_at: string
 }
 
-export default function ChannelConfigDrawer({ merchantId, merchantName, open, onClose }: Props) {
-  const [rows, setRows] = useState<Record<string, ChannelRow>>({})
-  const [saving, setSaving] = useState<string | null>(null)
-  const [wechatForm] = Form.useForm()
-  const [alipayForm] = Form.useForm()
+interface PlatformChannel {
+  channel: string
+  status: number
+  configured: boolean
+}
 
-  const formOf = (ch: 'wechat' | 'alipay') => (ch === 'wechat' ? wechatForm : alipayForm)
+const channelLabel: Record<string, string> = { wechat: '微信支付', alipay: '支付宝' }
+
+export default function ChannelConfigDrawer({ merchantId, merchantName, open, onClose }: Props) {
+  const [merchantChs, setMerchantChs] = useState<Record<string, ChannelRow>>({})
+  const [platformChs, setPlatformChs] = useState<PlatformChannel[]>([])
+  const [saving, setSaving] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
 
   const load = async () => {
     if (!merchantId) return
+    setLoading(true)
     try {
-      const { data } = await api.get(`/admin/merchants/${merchantId}/channels`)
+      const [mRes, pRes] = await Promise.all([
+        api.get(`/admin/merchants/${merchantId}/channels`),
+        api.get('/admin/platform/channels'),
+      ])
       const map: Record<string, ChannelRow> = {}
-      for (const row of (data.data ?? []) as ChannelRow[]) map[row.channel] = row
-      setRows(map)
-      for (const ch of ['wechat', 'alipay'] as const) {
-        const row = map[ch]
-        formOf(ch).setFieldsValue({ enabled: row ? row.status === 1 : false })
-      }
+      for (const row of (mRes.data.data ?? []) as ChannelRow[]) map[row.channel] = row
+      setMerchantChs(map)
+      setPlatformChs((pRes.data.data ?? []).filter((p: PlatformChannel) => p.status === 1 && p.configured))
     } catch {
-      setRows({})
+      setMerchantChs({})
+      setPlatformChs([])
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -44,15 +53,14 @@ export default function ChannelConfigDrawer({ merchantId, merchantName, open, on
     if (open && merchantId) load()
   }, [open, merchantId])
 
-  const save = async (ch: 'wechat' | 'alipay') => {
+  const toggle = async (ch: string, enabled: boolean) => {
     if (!merchantId) return
-    const v = await formOf(ch).validateFields()
     setSaving(ch)
     try {
       await api.put(`/admin/merchants/${merchantId}/channels/${ch}`, {
-        status: v.enabled ? 1 : 0,
+        status: enabled ? 1 : 0,
       })
-      message.success(`${ch === 'wechat' ? '微信支付' : '支付宝'}已保存`)
+      message.success(`${channelLabel[ch] ?? ch} ${enabled ? '已启用' : '已停用'}`)
       load()
     } catch (e: any) {
       message.error(e.response?.data?.msg ?? '保存失败')
@@ -61,30 +69,13 @@ export default function ChannelConfigDrawer({ merchantId, merchantName, open, on
     }
   }
 
-  const statusTag = (ch: 'wechat' | 'alipay') => {
-    const row = rows[ch]
+  const statusTag = (ch: string) => {
+    const row = merchantChs[ch]
     if (!row) return <Tag>未开通</Tag>
     return row.status === 1
       ? <Tag color="green">已启用 · {row.updated_at?.slice(0, 16).replace('T', ' ')}</Tag>
       : <Tag color="orange">已停用</Tag>
   }
-
-  const ChannelSection = ({ ch, label }: { ch: 'wechat' | 'alipay'; label: string }) => (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 12 }}>
-        <span style={{ fontWeight: 600, fontSize: 15 }}>{label}</span>
-        {statusTag(ch)}
-      </div>
-      <Form form={formOf(ch)} layout="vertical" initialValues={{ enabled: false }}>
-        <Form.Item name="enabled" label="启用渠道" valuePropName="checked">
-          <Switch checkedChildren="已启用" unCheckedChildren="停用" />
-        </Form.Item>
-        <Button type="primary" loading={saving === ch} onClick={() => save(ch)}>
-          保存 {label}
-        </Button>
-      </Form>
-    </div>
-  )
 
   return (
     <Drawer
@@ -110,9 +101,33 @@ export default function ChannelConfigDrawer({ merchantId, merchantName, open, on
         message="此处只控制该商户对各渠道的使用权限。渠道证书和密钥请到左侧「渠道凭证」统一配置。"
       />
 
-      <ChannelSection ch="wechat" label="微信支付" />
-      <Divider />
-      <ChannelSection ch="alipay" label="支付宝" />
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '48px 0' }}><Spin /></div>
+      ) : platformChs.length === 0 ? (
+        <Empty
+          description="平台尚未配置任何可用渠道，请先在「渠道凭证」中完成配置。"
+          style={{ marginTop: 48 }}
+        />
+      ) : (
+        platformChs.map((pc, i) => (
+          <div key={pc.channel}>
+            {i > 0 && <Divider />}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontWeight: 600, fontSize: 15 }}>{channelLabel[pc.channel] ?? pc.channel}</span>
+                {statusTag(pc.channel)}
+              </div>
+              <Switch
+                checked={merchantChs[pc.channel]?.status === 1}
+                loading={saving === pc.channel}
+                checkedChildren="已启用"
+                unCheckedChildren="停用"
+                onChange={(checked) => toggle(pc.channel, checked)}
+              />
+            </div>
+          </div>
+        ))
+      )}
     </Drawer>
   )
 }
