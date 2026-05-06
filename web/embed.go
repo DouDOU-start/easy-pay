@@ -1,4 +1,4 @@
-package webadmin
+package web
 
 import (
 	"embed"

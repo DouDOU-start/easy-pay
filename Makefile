@@ -16,14 +16,14 @@ dev: web-ensure
 			echo "[api] exited, restarting in 1s..."; \
 			sleep 1; \
 		done ) & \
-		( cd web/admin && npm run dev 2>&1 | sed -u 's/^/[web] /' ) & \
+		( cd web && npm run dev 2>&1 | sed -u 's/^/[web] /' ) & \
 		wait
 
 # First-run convenience: install npm deps only if node_modules is missing.
 web-deps:
-	@if [ ! -d web/admin/node_modules ]; then \
+	@if [ ! -d web/node_modules ]; then \
 		echo "→ installing frontend dependencies (first run only)..."; \
-		cd web/admin && npm install; \
+		cd web && npm install; \
 	fi
 
 # Start infrastructure only and block until healthy.
@@ -39,7 +39,7 @@ run:
 
 # Run only the React UI.
 web:
-	cd web/admin && npm run dev
+	cd web && npm run dev
 
 # Full stack including the api container (production-ish local run).
 up:
@@ -54,14 +54,14 @@ logs:
 # Build dist only if it doesn't exist yet (first run). Dev uses Vite HMR at :5173;
 # dist is only needed so `go run` can embed a fallback SPA for :8080.
 web-ensure: web-deps
-	@if [ ! -f web/admin/dist/index.html ]; then \
+	@if [ ! -f web/dist/index.html ]; then \
 		echo "→ building frontend dist (first run only)..."; \
-		cd web/admin && npm run build; \
+		cd web && npm run build; \
 	fi
 
-# Build the frontend bundle into web/admin/dist for go:embed to pick up.
+# Build the frontend bundle into web/dist for go:embed to pick up.
 web-build: web-deps
-	cd web/admin && npm run build
+	cd web && npm run build
 
 # Single-binary production build: bundles the admin SPA into the Go binary
 # via go:embed. After `make build`, running `./bin/easypay` serves both the

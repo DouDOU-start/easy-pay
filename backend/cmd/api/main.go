@@ -30,7 +30,7 @@ import (
 	"github.com/easypay/easy-pay/backend/internal/service/notify"
 	"github.com/easypay/easy-pay/backend/internal/service/payment"
 	"github.com/easypay/easy-pay/backend/internal/setup"
-	webadmin "github.com/easypay/easy-pay/web/admin"
+	webadmin "github.com/easypay/easy-pay/web"
 )
 
 func main() {

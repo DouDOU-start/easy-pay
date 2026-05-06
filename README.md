@@ -40,7 +40,7 @@ easy-pay/
 │   │   ├── server/           # Router 装配
 │   │   └── setup/            # 首装向导
 │   └── migrations/           # 嵌入式 SQL 迁移
-├── web/admin/                # React + Vite + Ant Design 管理后台
+├── web/                      # React + Vite + Ant Design 前端（管理员 + 商户）
 ├── deploy/
 │   ├── Dockerfile            # 多阶段构建
 │   └── docker-compose.yml    # Postgres + Redis + Adminer + API
