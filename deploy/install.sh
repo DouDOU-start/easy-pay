@@ -82,7 +82,7 @@ confirm() {
 get_public_ip() {
     local ip=""
     for url in "https://ipinfo.io/ip" "https://ifconfig.me" "https://icanhazip.com"; do
-        ip=$(curl -s --connect-timeout 3 "$url" 2>/dev/null | tr -d '[:space:]')
+        ip=$(curl -s --noproxy '*' --connect-timeout 3 "$url" 2>/dev/null | tr -d '[:space:]')
         if [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "$ip"
             return
