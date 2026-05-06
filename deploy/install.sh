@@ -103,7 +103,7 @@ detect_arch() {
 
 get_latest_version() {
     local version
-    version=$(curl -sSL "${GITHUB_API}/releases/latest" 2>/dev/null | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+    version=$(curl -sSL --connect-timeout 10 --max-time 15 "${GITHUB_API}/releases/latest" 2>/dev/null | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
     if [ -z "$version" ]; then
         fatal "无法获取最新版本号，请检查网络或使用 --version 指定版本"
     fi
@@ -113,7 +113,7 @@ get_latest_version() {
 validate_version() {
     local version="$1"
     local http_code
-    http_code=$(curl -s -o /dev/null -w "%{http_code}" "${GITHUB_API}/releases/tags/${version}")
+    http_code=$(curl -s --connect-timeout 10 --max-time 15 -o /dev/null -w "%{http_code}" "${GITHUB_API}/releases/tags/${version}")
     if [ "$http_code" != "200" ]; then
         fatal "版本 ${version} 不存在，请检查: https://github.com/${GITHUB_REPO}/releases"
     fi
@@ -294,21 +294,49 @@ main() {
     # ---------- Download binary ----------
 
     local binary_name="easypay-linux-${arch}"
-    local download_url="https://github.com/${GITHUB_REPO}/releases/download/${TARGET_VERSION}/${binary_name}"
-    local checksum_url="${download_url}.sha256"
+    local github_url="https://github.com/${GITHUB_REPO}/releases/download/${TARGET_VERSION}/${binary_name}"
+    local mirrors=(
+        "https://gh-proxy.com/${github_url}"
+        "https://ghfast.top/${github_url}"
+        "https://mirror.ghproxy.com/${github_url}"
+        "$github_url"
+    )
     local temp_dir
     temp_dir=$(mktemp -d)
     trap "rm -rf '$temp_dir'" EXIT
 
     info "下载 ${binary_name} (${TARGET_VERSION})..."
-    if ! curl -sSL --fail "$download_url" -o "$temp_dir/$binary_name"; then
-        fatal "下载失败，请检查版本号和网络连接"
+    local downloaded=false
+    for url in "${mirrors[@]}"; do
+        local source
+        if [ "$url" = "$github_url" ]; then
+            source="GitHub"
+        else
+            source="镜像"
+        fi
+        info "尝试 ${source}: ${url}"
+        if curl -sSL --fail --connect-timeout 10 --max-time 120 "$url" -o "$temp_dir/$binary_name" 2>/dev/null; then
+            local file_size
+            file_size=$(stat -c%s "$temp_dir/$binary_name" 2>/dev/null || stat -f%z "$temp_dir/$binary_name" 2>/dev/null || echo "0")
+            if [ "$file_size" -gt 1000000 ]; then
+                downloaded=true
+                success "下载完成 (${source})"
+                break
+            fi
+            warn "文件异常，尝试下一个源..."
+        else
+            warn "下载失败，尝试下一个源..."
+        fi
+    done
+
+    if [ "$downloaded" != "true" ]; then
+        fatal "所有下载源均失败，请手动下载: ${github_url}"
     fi
-    success "下载完成"
 
     # Checksum verification
+    local checksum_url="${github_url}.sha256"
     info "校验文件完整性..."
-    if curl -sSL --fail "$checksum_url" -o "$temp_dir/checksum.sha256" 2>/dev/null; then
+    if curl -sSL --fail --connect-timeout 5 --max-time 15 "$checksum_url" -o "$temp_dir/checksum.sha256" 2>/dev/null; then
         local expected actual
         expected=$(awk '{print $1}' "$temp_dir/checksum.sha256")
         actual=$(sha256sum "$temp_dir/$binary_name" | awk '{print $1}')
