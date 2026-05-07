@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -29,12 +30,15 @@ type Notifier interface {
 type PlatformBaseGetter func(ctx context.Context) string
 
 type Service struct {
-	orders           repository.OrderRepo
-	refunds          repository.RefundRepo
-	registry         channel.Registry
-	notifier         Notifier
-	log              *zap.Logger
+	orders             repository.OrderRepo
+	refunds            repository.RefundRepo
+	registry           channel.Registry
+	notifier           Notifier
+	log                *zap.Logger
 	platformBaseGetter PlatformBaseGetter
+
+	stopCh chan struct{}
+	wg     sync.WaitGroup
 }
 
 func NewService(
@@ -197,7 +201,11 @@ func (s *Service) Refund(ctx context.Context, in RefundInput) (*model.RefundOrde
 	if o.Status != model.OrderPaid && o.Status != model.OrderPartialRefunded {
 		return nil, ErrInvalidStatus
 	}
-	if in.Amount <= 0 || in.Amount > o.Amount {
+	refunded, err := s.refunds.SumRefundedAmount(ctx, o.OrderNo)
+	if err != nil {
+		return nil, err
+	}
+	if in.Amount <= 0 || refunded+in.Amount > o.Amount {
 		return nil, ErrRefundExceedAmount
 	}
 
@@ -240,6 +248,16 @@ func (s *Service) Refund(ctx context.Context, in RefundInput) (*model.RefundOrde
 	ro.Status = res.Status
 	ro.ChannelRefundNo = res.ChannelRefundNo
 	_ = s.refunds.Update(ctx, ro)
+
+	if ro.Status == model.RefundSuccess {
+		if refunded+in.Amount >= o.Amount {
+			o.Status = model.OrderRefunded
+		} else {
+			o.Status = model.OrderPartialRefunded
+		}
+		_ = s.orders.Update(ctx, o)
+	}
+
 	return ro, nil
 }
 
@@ -281,4 +299,38 @@ func (s *Service) HandlePaymentNotify(ctx context.Context, ev *channel.NotifyEve
 		"paid_at":           paidAt.Format(time.RFC3339),
 	}
 	return s.notifier.Enqueue(ctx, o.MerchantID, o.OrderNo, string(channel.EventPaymentSuccess), payload)
+}
+
+func (s *Service) StartExpireScheduler() {
+	s.stopCh = make(chan struct{})
+	s.wg.Add(1)
+	go s.expireLoop()
+}
+
+func (s *Service) StopExpireScheduler() {
+	if s.stopCh != nil {
+		close(s.stopCh)
+		s.wg.Wait()
+	}
+}
+
+func (s *Service) expireLoop() {
+	defer s.wg.Done()
+	t := time.NewTicker(30 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-s.stopCh:
+			return
+		case <-t.C:
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			n, err := s.orders.CloseExpired(ctx, time.Now(), 200)
+			cancel()
+			if err != nil {
+				s.log.Error("close expired orders failed", zap.Error(err))
+			} else if n > 0 {
+				s.log.Info("closed expired orders", zap.Int64("count", n))
+			}
+		}
+	}
 }

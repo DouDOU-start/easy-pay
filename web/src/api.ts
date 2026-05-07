@@ -179,6 +179,9 @@ export const adminApi = {
   createTestOrder: (data: Record<string, any>) =>
     http.post('/api/admin/orders/test', data).then(unwrap),
 
+  refundOrder: (orderNo: string, data: { amount: number; reason?: string }) =>
+    http.post(`/api/admin/orders/${orderNo}/refund`, data).then(unwrap),
+
   // notify logs
   listNotifyLogs: (params: Record<string, any>) =>
     http.get('/api/admin/notify_logs', { params }).then(unwrap<PageResult<NotifyLog>>),

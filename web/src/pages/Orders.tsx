@@ -65,6 +65,10 @@ export default function Orders() {
   const [creating, setCreating] = useState(false)
   const [created, setCreated] = useState<CreatedOrder | null>(null)
   const [form] = Form.useForm()
+  const [refundOpen, setRefundOpen] = useState(false)
+  const [refunding, setRefunding] = useState(false)
+  const [refundTarget, setRefundTarget] = useState<any>(null)
+  const [refundForm] = Form.useForm()
 
   const load = async () => {
     const result = await adminApi.listOrders({ page, size, ...filter })
@@ -130,6 +134,28 @@ export default function Orders() {
       message.error(e.response?.data?.msg || '下单失败')
     } finally {
       setCreating(false)
+    }
+  }
+
+  const openRefund = (record: any) => {
+    setRefundTarget(record)
+    refundForm.setFieldsValue({ amount: record.amount, reason: '' })
+    setRefundOpen(true)
+  }
+
+  const submitRefund = async () => {
+    const v = await refundForm.validateFields()
+    setRefunding(true)
+    try {
+      await adminApi.refundOrder(refundTarget.order_no, { amount: v.amount, reason: v.reason })
+      message.success('退款请求已提交')
+      setRefundOpen(false)
+      setRefundTarget(null)
+      load()
+    } catch (e: any) {
+      message.error(e.response?.data?.msg || '退款失败')
+    } finally {
+      setRefunding(false)
     }
   }
 
@@ -275,6 +301,10 @@ export default function Orders() {
             dataIndex: 'status',
             width: 130,
             render: (s: string, row: any) => {
+              const expired = s === 'pending' && row.expire_at && new Date(row.expire_at) < new Date()
+              if (expired) {
+                return <Tag color="default">已过期</Tag>
+              }
               if (s === 'pending' && (row.code_url || row.h5_url)) {
                 return (
                   <Tag
@@ -313,6 +343,17 @@ export default function Orders() {
             dataIndex: 'paid_at',
             width: 200,
             render: (v: string) => <TimeCell value={v} accent />,
+          },
+          {
+            title: '操作',
+            width: 100,
+            fixed: 'right' as const,
+            render: (_: any, row: any) => {
+              if (row.status === 'paid' || row.status === 'partial_refunded') {
+                return <Button type="link" size="small" danger onClick={() => openRefund(row)}>退款</Button>
+              }
+              return null
+            },
           },
         ]}
       />
@@ -418,6 +459,50 @@ export default function Orders() {
             )}
           </div>
         )}
+      </Modal>
+
+      <Modal
+        title="订单退款"
+        open={refundOpen}
+        onOk={submitRefund}
+        onCancel={() => { setRefundOpen(false); setRefundTarget(null) }}
+        confirmLoading={refunding}
+        okText="确认退款"
+        okButtonProps={{ danger: true }}
+        cancelText="取消"
+        centered
+      >
+        {refundTarget && (
+          <div style={{ marginBottom: 16, padding: '12px 16px', background: 'var(--bg-card)', borderRadius: 8 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 4 }}>
+              平台单号：<span className="mono">{refundTarget.order_no}</span>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+              订单金额：<span className="money">¥{(refundTarget.amount / 100).toFixed(2)}</span>
+            </div>
+          </div>
+        )}
+        <Form form={refundForm} layout="vertical" requiredMark={false}>
+          <Form.Item
+            name="amount"
+            label="退款金额（分）"
+            rules={[
+              { required: true, message: '请输入退款金额' },
+              {
+                validator: (_, val) =>
+                  val && refundTarget && val > refundTarget.amount
+                    ? Promise.reject('退款金额不能超过订单金额')
+                    : Promise.resolve(),
+              },
+            ]}
+            extra={refundTarget ? `最大可退 ${refundTarget.amount} 分（¥${(refundTarget.amount / 100).toFixed(2)}）` : ''}
+          >
+            <InputNumber min={1} max={refundTarget?.amount} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="reason" label="退款原因">
+            <Input.TextArea rows={2} placeholder="可选" />
+          </Form.Item>
+        </Form>
       </Modal>
     </>
   )

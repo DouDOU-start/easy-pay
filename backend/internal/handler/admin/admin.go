@@ -638,6 +638,39 @@ func (h *Handler) TestCreateOrder(c *gin.Context) {
 	}})
 }
 
+// ---------- Refund ----------
+
+type adminRefundReq struct {
+	Amount int64  `json:"amount" binding:"required,min=1"`
+	Reason string `json:"reason"`
+}
+
+func (h *Handler) RefundOrder(c *gin.Context) {
+	orderNo := c.Param("order_no")
+	o, err := h.orders.GetByOrderNo(c.Request.Context(), orderNo)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "msg": "订单不存在"})
+		return
+	}
+	var req adminRefundReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "msg": err.Error()})
+		return
+	}
+	ro, err := h.paymentSvc.Refund(c.Request.Context(), payment.RefundInput{
+		MerchantID:       o.MerchantID,
+		MerchantOrderNo:  o.MerchantOrderNo,
+		MerchantRefundNo: idgen.OrderNo("ARF"),
+		Amount:           req.Amount,
+		Reason:           req.Reason,
+	})
+	if err != nil {
+		httputil.Fail500(c, "REFUND_FAILED", "退款失败: "+err.Error(), err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": ro})
+}
+
 // ---------- Notify logs ----------
 
 func (h *Handler) ListNotifyLogs(c *gin.Context) {

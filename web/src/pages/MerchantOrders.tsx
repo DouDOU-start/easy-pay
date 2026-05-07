@@ -169,7 +169,12 @@ export default function MerchantOrders() {
             title: '状态',
             dataIndex: 'status',
             width: 130,
-            render: (s: string) => <Tag color={statusColor[s] || 'default'}>{statusLabel[s] || s}</Tag>,
+            render: (s: string, row: any) => {
+              if (s === 'pending' && row.expire_at && new Date(row.expire_at) < new Date()) {
+                return <Tag color="default">已过期</Tag>
+              }
+              return <Tag color={statusColor[s] || 'default'}>{statusLabel[s] || s}</Tag>
+            },
           },
           {
             title: '渠道单号',

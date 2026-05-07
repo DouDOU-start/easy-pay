@@ -230,6 +230,7 @@ type OrderRepo interface {
 	Update(ctx context.Context, o *model.Order) error
 	MarkPaid(ctx context.Context, orderNo, channelOrderNo string, paidAt time.Time) error
 	List(ctx context.Context, filter OrderFilter) ([]*model.Order, int64, error)
+	CloseExpired(ctx context.Context, now time.Time, limit int) (int64, error)
 }
 
 type OrderFilter struct {
@@ -294,6 +295,18 @@ func (r *orderRepo) MarkPaid(ctx context.Context, orderNo, channelOrderNo string
 	return nil
 }
 
+func (r *orderRepo) CloseExpired(ctx context.Context, now time.Time, limit int) (int64, error) {
+	res := r.db.WithContext(ctx).Model(&model.Order{}).
+		Where("status = ? AND expire_at IS NOT NULL AND expire_at <= ?", model.OrderPending, now).
+		Limit(limit).
+		Updates(map[string]any{
+			"status":     model.OrderClosed,
+			"closed_at":  now,
+			"updated_at": now,
+		})
+	return res.RowsAffected, res.Error
+}
+
 func (r *orderRepo) List(ctx context.Context, f OrderFilter) ([]*model.Order, int64, error) {
 	db := r.db.WithContext(ctx).Model(&model.Order{})
 	if f.MerchantID > 0 {
@@ -330,6 +343,7 @@ type RefundRepo interface {
 	Update(ctx context.Context, r *model.RefundOrder) error
 	GetByRefundNo(ctx context.Context, refundNo string) (*model.RefundOrder, error)
 	GetByMerchantRefundNo(ctx context.Context, merchantID int64, mrNo string) (*model.RefundOrder, error)
+	SumRefundedAmount(ctx context.Context, orderNo string) (int64, error)
 }
 
 type refundRepo struct{ db *gorm.DB }
@@ -359,6 +373,15 @@ func (r *refundRepo) GetByMerchantRefundNo(ctx context.Context, merchantID int64
 		return nil, ErrNotFound
 	}
 	return &ro, err
+}
+func (r *refundRepo) SumRefundedAmount(ctx context.Context, orderNo string) (int64, error) {
+	var total int64
+	err := r.db.WithContext(ctx).
+		Model(&model.RefundOrder{}).
+		Where("order_no = ? AND status = ?", orderNo, model.RefundSuccess).
+		Select("COALESCE(SUM(amount), 0)").
+		Scan(&total).Error
+	return total, err
 }
 
 // ---------- NotifyLog ----------

@@ -166,6 +166,8 @@ func runNormalMode(cfg *config.Config) {
 		return fallbackBase
 	}
 	paymentSvc := payment.NewService(orderRepo, refundRepo, reg, notifySvc, platformBaseGetter, logger)
+	paymentSvc.StartExpireScheduler()
+	defer paymentSvc.StopExpireScheduler()
 
 	// --- handlers ---
 	paymentH := api.NewPaymentHandler(paymentSvc)

@@ -93,6 +93,7 @@ func NewRouter(d Deps) *gin.Engine {
 
 		adminGrp.GET("/orders", d.Admin.ListOrders)
 		adminGrp.POST("/orders/test", d.Admin.TestCreateOrder)
+		adminGrp.POST("/orders/:order_no/refund", d.Admin.RefundOrder)
 		adminGrp.POST("/wechat/parse-cert", d.Admin.ParseWechatCert)
 
 		adminGrp.GET("/notify_logs", d.Admin.ListNotifyLogs)
