@@ -3,8 +3,12 @@ package alipay
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
+
+	"github.com/smartwalle/alipay/v3"
 
 	"github.com/easypay/easy-pay/backend/internal/channel"
 	"github.com/easypay/easy-pay/backend/internal/model"
@@ -14,14 +18,15 @@ import (
 // merchant_channels.config.
 type Config struct {
 	AppID           string `json:"app_id"`
-	PrivateKey      string `json:"private_key"`        // app private key (PKCS1/PKCS8 PEM)
-	AlipayPublicKey string `json:"alipay_public_key"`  // alipay platform public key
-	SignType        string `json:"sign_type"`          // RSA2
+	PrivateKey      string `json:"private_key"`       // app private key (PKCS1/PKCS8 PEM)
+	AlipayPublicKey string `json:"alipay_public_key"` // alipay platform public key
+	SignType        string `json:"sign_type"`         // RSA2
 	IsProduction    bool   `json:"is_production"`
 }
 
 type Channel struct {
-	cfg Config
+	cfg    Config
+	client *alipay.Client
 }
 
 func New(_ context.Context, raw json.RawMessage) (*Channel, error) {
@@ -32,7 +37,19 @@ func New(_ context.Context, raw json.RawMessage) (*Channel, error) {
 	if c.SignType == "" {
 		c.SignType = "RSA2"
 	}
-	return &Channel{cfg: c}, nil
+	if c.AppID == "" || c.PrivateKey == "" || c.AlipayPublicKey == "" {
+		return nil, errors.New("alipay: incomplete config (app_id/private_key/alipay_public_key required)")
+	}
+
+	client, err := alipay.New(c.AppID, c.PrivateKey, c.IsProduction)
+	if err != nil {
+		return nil, fmt.Errorf("alipay: new client: %w", err)
+	}
+	if err := client.LoadAliPayPublicKey(c.AlipayPublicKey); err != nil {
+		return nil, fmt.Errorf("alipay: load public key: %w", err)
+	}
+
+	return &Channel{cfg: c, client: client}, nil
 }
 
 func (c *Channel) Name() model.Channel { return model.ChannelAlipay }
@@ -76,20 +93,25 @@ func (c *Channel) Refund(ctx context.Context, req channel.RefundRequest) (*chann
 	}, nil
 }
 
-// ParseNotify validates the form-post signature and returns a normalised event.
-// TODO: use alipay.Client.GetTradeNotification once wired.
 func (c *Channel) ParseNotify(ctx context.Context, r *http.Request) (*channel.NotifyEvent, error) {
 	_ = ctx
-	if err := r.ParseForm(); err != nil {
-		return nil, err
+	noti, err := c.client.GetTradeNotification(r)
+	if err != nil {
+		return nil, fmt.Errorf("alipay: signature verification failed: %w", err)
 	}
-	amount, _ := strconv.ParseFloat(r.PostForm.Get("total_amount"), 64)
+	if noti == nil {
+		return nil, errors.New("alipay: empty notification")
+	}
+	if noti.TradeStatus != alipay.TradeStatusSuccess && noti.TradeStatus != alipay.TradeStatusFinished {
+		return nil, fmt.Errorf("alipay: unexpected trade_status %s", noti.TradeStatus)
+	}
+	amount, _ := strconv.ParseFloat(noti.TotalAmount, 64)
 	return &channel.NotifyEvent{
 		Type:           channel.EventPaymentSuccess,
-		OrderNo:        r.PostForm.Get("out_trade_no"),
-		ChannelOrderNo: r.PostForm.Get("trade_no"),
+		OrderNo:        noti.OutTradeNo,
+		ChannelOrderNo: noti.TradeNo,
 		Amount:         int64(amount * 100),
-		PaidAt:         r.PostForm.Get("gmt_payment"),
+		PaidAt:         noti.GmtPayment,
 	}, nil
 }
 

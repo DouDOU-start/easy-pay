@@ -105,7 +105,10 @@ func runSetupMode(cfgPath string) {
 
 // runNormalMode starts the full application server.
 func runNormalMode(cfg *config.Config) {
-	logger, _ := zap.NewProduction()
+	logger, err := buildLogger(cfg.Log)
+	if err != nil {
+		log.Fatalf("init logger: %v", err)
+	}
 	defer logger.Sync()
 
 	// --- infra: db, redis, cipher ---
@@ -170,10 +173,10 @@ func runNormalMode(cfg *config.Config) {
 	defer paymentSvc.StopExpireScheduler()
 
 	// --- handlers ---
-	paymentH := api.NewPaymentHandler(paymentSvc)
+	paymentH := api.NewPaymentHandler(paymentSvc, logger)
 	callbackH := callback.New(paymentSvc, reg, logger)
 	authH := auth.New(merchantRepo, rdb)
-	adminH := admin.New(merchantRepo, platformChRepo, orderRepo, refundRepo, notifyLogRepo, cipher, reg, paymentSvc, settingsRepo)
+	adminH := admin.New(merchantRepo, platformChRepo, orderRepo, refundRepo, notifyLogRepo, cipher, reg, paymentSvc, settingsRepo, logger)
 	merchantH := merchant.New(merchantRepo, orderRepo, notifyLogRepo)
 
 	// --- router / server ---
@@ -190,6 +193,7 @@ func runNormalMode(cfg *config.Config) {
 		Admin:        adminH,
 		Merchant:     merchantH,
 		StaticFS:     staticFS,
+		Logger:       logger,
 	})
 
 	srv := &http.Server{
@@ -214,4 +218,24 @@ func runNormalMode(cfg *config.Config) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(ctx)
+}
+
+func buildLogger(cfg config.LogConfig) (*zap.Logger, error) {
+	var zapCfg zap.Config
+	if cfg.Format == "console" {
+		zapCfg = zap.NewDevelopmentConfig()
+	} else {
+		zapCfg = zap.NewProductionConfig()
+	}
+	switch strings.ToLower(cfg.Level) {
+	case "debug":
+		zapCfg.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
+	case "info":
+		zapCfg.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
+	case "warn":
+		zapCfg.Level = zap.NewAtomicLevelAt(zap.WarnLevel)
+	case "error":
+		zapCfg.Level = zap.NewAtomicLevelAt(zap.ErrorLevel)
+	}
+	return zapCfg.Build()
 }

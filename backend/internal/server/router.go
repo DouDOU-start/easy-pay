@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 
 	"github.com/easypay/easy-pay/backend/internal/handler/admin"
 	"github.com/easypay/easy-pay/backend/internal/handler/api"
@@ -25,11 +26,12 @@ type Deps struct {
 	Admin        *admin.Handler
 	Merchant     *merchant.Handler
 	StaticFS     fs.FS
+	Logger       *zap.Logger
 }
 
 func NewRouter(d Deps) *gin.Engine {
 	r := gin.New()
-	r.Use(gin.Recovery(), gin.Logger())
+	r.Use(gin.Recovery(), middleware.RequestID(), middleware.AccessLog(d.Logger))
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
@@ -50,7 +52,7 @@ func NewRouter(d Deps) *gin.Engine {
 
 	// Downstream payment API (merchant HMAC auth)
 	payGrp := r.Group("/api/v1/pay")
-	payGrp.Use(middleware.MerchantAuth(d.MerchantRepo))
+	payGrp.Use(middleware.MerchantAuth(d.MerchantRepo, d.Logger))
 	{
 		payGrp.POST("/create", d.Payment.Create)
 		payGrp.GET("/query", d.Payment.Query)

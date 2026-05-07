@@ -21,6 +21,7 @@ var (
 	ErrOrderNotFound      = errors.New("payment: order not found")
 	ErrInvalidStatus      = errors.New("payment: invalid status for operation")
 	ErrRefundExceedAmount = errors.New("payment: refund amount exceeds remaining")
+	ErrAmountMismatch     = errors.New("payment: callback amount does not match order")
 )
 
 type Notifier interface {
@@ -80,7 +81,10 @@ type CreateOrderResult struct {
 
 func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*CreateOrderResult, error) {
 	if existing, err := s.orders.GetByMerchantOrderNo(ctx, in.MerchantID, in.MerchantOrderNo); err == nil {
-		// idempotent: return the existing order instead of creating a duplicate
+		s.log.Debug("order idempotent hit",
+			zap.Int64("merchant_id", in.MerchantID),
+			zap.String("merchant_order_no", in.MerchantOrderNo),
+			zap.String("order_no", existing.OrderNo))
 		return &CreateOrderResult{
 			OrderNo: existing.OrderNo,
 			CodeURL: existing.CodeURL,
@@ -92,6 +96,10 @@ func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*Create
 
 	ch, err := s.registry.Resolve(ctx, in.MerchantID, in.Channel)
 	if err != nil {
+		s.log.Error("resolve channel failed",
+			zap.Int64("merchant_id", in.MerchantID),
+			zap.String("channel", string(in.Channel)),
+			zap.Error(err))
 		return nil, fmt.Errorf("resolve channel: %w", err)
 	}
 
@@ -126,6 +134,11 @@ func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*Create
 	}
 
 	notifyURL := fmt.Sprintf("%s/callback/%s/%d", s.platformBaseGetter(ctx), in.Channel, in.MerchantID)
+	s.log.Info("calling channel prepay",
+		zap.String("order_no", orderNo),
+		zap.String("channel", string(in.Channel)),
+		zap.String("trade_type", string(in.TradeType)),
+		zap.Int64("amount", in.Amount))
 	res, err := ch.Prepay(ctx, channel.PrepayRequest{
 		OrderNo:   orderNo,
 		Subject:   in.Subject,
@@ -137,6 +150,10 @@ func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*Create
 		ExpireAt:  expireAt,
 	})
 	if err != nil {
+		s.log.Error("channel prepay failed",
+			zap.String("order_no", orderNo),
+			zap.String("channel", string(in.Channel)),
+			zap.Error(err))
 		order.Status = model.OrderFailed
 		_ = s.orders.Update(ctx, order)
 		return nil, fmt.Errorf("prepay: %w", err)
@@ -147,6 +164,10 @@ func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*Create
 	if err := s.orders.Update(ctx, order); err != nil {
 		return nil, err
 	}
+	s.log.Info("order created successfully",
+		zap.String("order_no", orderNo),
+		zap.Int64("merchant_id", in.MerchantID),
+		zap.String("channel", string(in.Channel)))
 	return &CreateOrderResult{OrderNo: orderNo, CodeURL: res.CodeURL, H5URL: res.H5URL}, nil
 }
 
@@ -231,8 +252,17 @@ func (s *Service) Refund(ctx context.Context, in RefundInput) (*model.RefundOrde
 
 	ch, err := s.registry.Resolve(ctx, in.MerchantID, o.Channel)
 	if err != nil {
+		s.log.Error("refund resolve channel failed",
+			zap.String("refund_no", ro.RefundNo),
+			zap.Error(err))
 		return nil, err
 	}
+	s.log.Info("calling channel refund",
+		zap.String("refund_no", ro.RefundNo),
+		zap.String("order_no", o.OrderNo),
+		zap.String("channel", string(o.Channel)),
+		zap.Int64("amount", in.Amount),
+		zap.Int64("already_refunded", refunded))
 	res, err := ch.Refund(ctx, channel.RefundRequest{
 		OrderNo:      o.OrderNo,
 		RefundNo:     ro.RefundNo,
@@ -241,6 +271,10 @@ func (s *Service) Refund(ctx context.Context, in RefundInput) (*model.RefundOrde
 		Reason:       in.Reason,
 	})
 	if err != nil {
+		s.log.Error("channel refund failed",
+			zap.String("refund_no", ro.RefundNo),
+			zap.String("order_no", o.OrderNo),
+			zap.Error(err))
 		ro.Status = model.RefundFailed
 		_ = s.refunds.Update(ctx, ro)
 		return nil, err
@@ -248,6 +282,11 @@ func (s *Service) Refund(ctx context.Context, in RefundInput) (*model.RefundOrde
 	ro.Status = res.Status
 	ro.ChannelRefundNo = res.ChannelRefundNo
 	_ = s.refunds.Update(ctx, ro)
+	s.log.Info("refund result",
+		zap.String("refund_no", ro.RefundNo),
+		zap.String("order_no", o.OrderNo),
+		zap.String("status", string(ro.Status)),
+		zap.String("channel_refund_no", ro.ChannelRefundNo))
 
 	if ro.Status == model.RefundSuccess {
 		if refunded+in.Amount >= o.Amount {
@@ -256,6 +295,9 @@ func (s *Service) Refund(ctx context.Context, in RefundInput) (*model.RefundOrde
 			o.Status = model.OrderPartialRefunded
 		}
 		_ = s.orders.Update(ctx, o)
+		s.log.Info("order status updated after refund",
+			zap.String("order_no", o.OrderNo),
+			zap.String("status", string(o.Status)))
 	}
 
 	return ro, nil
@@ -273,20 +315,28 @@ func (s *Service) HandlePaymentNotify(ctx context.Context, ev *channel.NotifyEve
 	}
 
 	if o.Amount != ev.Amount {
-		s.log.Warn("amount mismatch on callback",
+		s.log.Error("amount mismatch on callback, rejecting",
 			zap.String("order_no", ev.OrderNo),
 			zap.Int64("expected", o.Amount),
 			zap.Int64("got", ev.Amount))
+		return ErrAmountMismatch
 	}
 
 	paidAt := time.Now()
 	if err := s.orders.MarkPaid(ctx, o.OrderNo, ev.ChannelOrderNo, paidAt); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			// already paid → idempotent success
+			s.log.Debug("payment notify idempotent",
+				zap.String("order_no", ev.OrderNo))
 			return nil
 		}
 		return err
 	}
+	s.log.Info("order paid",
+		zap.String("order_no", o.OrderNo),
+		zap.Int64("merchant_id", o.MerchantID),
+		zap.String("channel", string(o.Channel)),
+		zap.String("channel_order_no", ev.ChannelOrderNo),
+		zap.Int64("amount", o.Amount))
 
 	payload := map[string]any{
 		"order_no":          o.OrderNo,

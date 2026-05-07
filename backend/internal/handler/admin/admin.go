@@ -15,6 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/easypay/easy-pay/backend/internal/channel/registry"
@@ -36,6 +37,7 @@ type Handler struct {
 	registry    *registry.Registry
 	paymentSvc  *payment.Service
 	settings    repository.SystemSettingRepo
+	log         *zap.Logger
 }
 
 func New(
@@ -48,6 +50,7 @@ func New(
 	reg *registry.Registry,
 	paymentSvc *payment.Service,
 	settings repository.SystemSettingRepo,
+	log *zap.Logger,
 ) *Handler {
 	return &Handler{
 		merchants:   merchants,
@@ -59,6 +62,7 @@ func New(
 		registry:    reg,
 		paymentSvc:  paymentSvc,
 		settings:    settings,
+		log:         log,
 	}
 }
 
@@ -112,7 +116,10 @@ func (h *Handler) CreateMerchant(c *gin.Context) {
 		httputil.Fail500(c, "CREATE_FAILED", "操作失败，请稍后重试", err)
 		return
 	}
-	// Return app_secret and the generated plaintext password only on creation.
+	h.log.Info("merchant created",
+		zap.Int64("id", m.ID),
+		zap.String("mch_no", m.MchNo),
+		zap.String("email", m.Email))
 	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": gin.H{
 		"id":         m.ID,
 		"mch_no":     m.MchNo,
@@ -223,6 +230,7 @@ func (h *Handler) DeleteMerchant(c *gin.Context) {
 		httputil.Fail500(c, "DELETE_FAILED", "删除失败，请稍后重试", err)
 		return
 	}
+	h.log.Warn("merchant deleted", zap.Int64("id", id))
 	c.JSON(http.StatusOK, gin.H{"code": "OK"})
 }
 
@@ -405,6 +413,10 @@ func (h *Handler) UpsertPlatformChannel(c *gin.Context) {
 		}
 		cascaded = n
 	}
+	h.log.Info("platform channel updated",
+		zap.String("channel", string(ch)),
+		zap.Int16("status", status),
+		zap.Int64("merchant_channels_disabled", cascaded))
 	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": gin.H{
 		"merchant_channels_disabled": cascaded,
 	}})
@@ -657,6 +669,10 @@ func (h *Handler) RefundOrder(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "msg": err.Error()})
 		return
 	}
+	h.log.Info("admin refund request",
+		zap.String("order_no", orderNo),
+		zap.Int64("merchant_id", o.MerchantID),
+		zap.Int64("amount", req.Amount))
 	ro, err := h.paymentSvc.Refund(c.Request.Context(), payment.RefundInput{
 		MerchantID:       o.MerchantID,
 		MerchantOrderNo:  o.MerchantOrderNo,
@@ -665,9 +681,16 @@ func (h *Handler) RefundOrder(c *gin.Context) {
 		Reason:           req.Reason,
 	})
 	if err != nil {
+		h.log.Error("admin refund failed",
+			zap.String("order_no", orderNo),
+			zap.Error(err))
 		httputil.Fail500(c, "REFUND_FAILED", "退款失败: "+err.Error(), err)
 		return
 	}
+	h.log.Info("admin refund submitted",
+		zap.String("order_no", orderNo),
+		zap.String("refund_no", ro.RefundNo),
+		zap.String("status", string(ro.Status)))
 	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": ro})
 }
 

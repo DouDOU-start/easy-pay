@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 
 	"github.com/easypay/easy-pay/backend/internal/handler/middleware"
 	"github.com/easypay/easy-pay/backend/internal/model"
@@ -13,10 +14,11 @@ import (
 
 type PaymentHandler struct {
 	svc *payment.Service
+	log *zap.Logger
 }
 
-func NewPaymentHandler(svc *payment.Service) *PaymentHandler {
-	return &PaymentHandler{svc: svc}
+func NewPaymentHandler(svc *payment.Service, log *zap.Logger) *PaymentHandler {
+	return &PaymentHandler{svc: svc, log: log}
 }
 
 type createOrderReq struct {
@@ -37,6 +39,12 @@ func (h *PaymentHandler) Create(c *gin.Context) {
 		return
 	}
 	m := middleware.GetMerchant(c)
+	h.log.Info("create order",
+		zap.Int64("merchant_id", m.ID),
+		zap.String("merchant_order_no", req.MerchantOrderNo),
+		zap.String("channel", string(req.Channel)),
+		zap.String("trade_type", string(req.TradeType)),
+		zap.Int64("amount", req.Amount))
 	res, err := h.svc.CreateOrder(c.Request.Context(), payment.CreateOrderInput{
 		MerchantID:      m.ID,
 		MerchantOrderNo: req.MerchantOrderNo,
@@ -50,9 +58,16 @@ func (h *PaymentHandler) Create(c *gin.Context) {
 		ExpireSeconds:   req.ExpireSeconds,
 	})
 	if err != nil {
+		h.log.Error("create order failed",
+			zap.Int64("merchant_id", m.ID),
+			zap.String("merchant_order_no", req.MerchantOrderNo),
+			zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "CREATE_FAILED", "msg": err.Error()})
 		return
 	}
+	h.log.Info("order created",
+		zap.Int64("merchant_id", m.ID),
+		zap.String("order_no", res.OrderNo))
 	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": res})
 }
 
@@ -69,6 +84,10 @@ func (h *PaymentHandler) Query(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "msg": err.Error()})
 			return
 		}
+		h.log.Error("query order failed",
+			zap.Int64("merchant_id", m.ID),
+			zap.String("merchant_order_no", merchantOrderNo),
+			zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "QUERY_FAILED", "msg": err.Error()})
 		return
 	}
@@ -86,7 +105,14 @@ func (h *PaymentHandler) Close(c *gin.Context) {
 		return
 	}
 	m := middleware.GetMerchant(c)
+	h.log.Info("close order",
+		zap.Int64("merchant_id", m.ID),
+		zap.String("merchant_order_no", req.MerchantOrderNo))
 	if err := h.svc.CloseOrder(c.Request.Context(), m.ID, req.MerchantOrderNo); err != nil {
+		h.log.Error("close order failed",
+			zap.Int64("merchant_id", m.ID),
+			zap.String("merchant_order_no", req.MerchantOrderNo),
+			zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "CLOSE_FAILED", "msg": err.Error()})
 		return
 	}
@@ -107,6 +133,11 @@ func (h *PaymentHandler) Refund(c *gin.Context) {
 		return
 	}
 	m := middleware.GetMerchant(c)
+	h.log.Info("refund request",
+		zap.Int64("merchant_id", m.ID),
+		zap.String("merchant_order_no", req.MerchantOrderNo),
+		zap.String("merchant_refund_no", req.MerchantRefundNo),
+		zap.Int64("amount", req.Amount))
 	ro, err := h.svc.Refund(c.Request.Context(), payment.RefundInput{
 		MerchantID:       m.ID,
 		MerchantOrderNo:  req.MerchantOrderNo,
@@ -115,8 +146,16 @@ func (h *PaymentHandler) Refund(c *gin.Context) {
 		Reason:           req.Reason,
 	})
 	if err != nil {
+		h.log.Error("refund failed",
+			zap.Int64("merchant_id", m.ID),
+			zap.String("merchant_order_no", req.MerchantOrderNo),
+			zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "REFUND_FAILED", "msg": err.Error()})
 		return
 	}
+	h.log.Info("refund submitted",
+		zap.Int64("merchant_id", m.ID),
+		zap.String("refund_no", ro.RefundNo),
+		zap.String("status", string(ro.Status)))
 	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": ro})
 }

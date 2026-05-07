@@ -197,14 +197,24 @@ func (s *Service) deliver(id int64) {
 	n.ResponseBody = string(respBody)
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		// downstream is expected to respond with body "success" or 2xx
 		now := time.Now()
 		n.Status = model.NotifySuccess
 		n.NextRetryAt = nil
 		n.UpdatedAt = now
 		_ = s.logs.Update(ctx, n)
+		s.log.Info("notify delivered",
+			zap.Int64("id", n.ID),
+			zap.String("order_no", n.OrderNo),
+			zap.Int64("merchant_id", n.MerchantID),
+			zap.Int("http_status", resp.StatusCode))
 		return
 	}
+	s.log.Warn("notify delivery failed",
+		zap.Int64("id", n.ID),
+		zap.String("order_no", n.OrderNo),
+		zap.Int64("merchant_id", n.MerchantID),
+		zap.Int("http_status", resp.StatusCode),
+		zap.Int("retry_count", n.RetryCount))
 	s.markFailed(ctx, n, fmt.Sprintf("http %d", resp.StatusCode))
 }
 
