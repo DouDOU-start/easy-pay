@@ -119,6 +119,11 @@ function unwrap<T>(res: { data: { data: T } }): T {
   return res.data.data
 }
 
+// --------------- health / version ---------------
+
+export const fetchVersion = () =>
+  http.get('/health').then((res) => res.data.version as string)
+
 // --------------- auth ---------------
 
 export const authApi = {

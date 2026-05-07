@@ -194,6 +194,7 @@ func runNormalMode(cfg *config.Config) {
 		Merchant:     merchantH,
 		StaticFS:     staticFS,
 		Logger:       logger,
+		Version:      version,
 	})
 
 	srv := &http.Server{

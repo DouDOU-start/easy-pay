@@ -1,9 +1,12 @@
 import { Form, Input, Button, message } from 'antd'
 import { useNavigate } from 'react-router-dom'
-import { TOKEN_KEY, authApi, setUser } from '../api'
+import { useEffect, useState } from 'react'
+import { TOKEN_KEY, authApi, setUser, fetchVersion } from '../api'
 
 export default function Login() {
   const nav = useNavigate()
+  const [ver, setVer] = useState('')
+  useEffect(() => { fetchVersion().then(setVer).catch(() => {}) }, [])
   const onFinish = async (v: { email: string; password: string }) => {
     try {
       const { token, user } = await authApi.login(v.email, v.password)
@@ -23,7 +26,7 @@ export default function Login() {
           <div className="mark">ep</div>
           <div>
             <div className="label">易支付</div>
-            <div className="caption">支付管理平台 · v0.1</div>
+            <div className="caption">支付管理平台{ver ? ` · ${ver}` : ''}</div>
           </div>
         </div>
 

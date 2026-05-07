@@ -27,6 +27,7 @@ type Deps struct {
 	Merchant     *merchant.Handler
 	StaticFS     fs.FS
 	Logger       *zap.Logger
+	Version      string
 }
 
 func NewRouter(d Deps) *gin.Engine {
@@ -34,7 +35,7 @@ func NewRouter(d Deps) *gin.Engine {
 	r.Use(gin.Recovery(), middleware.RequestID(), middleware.AccessLog(d.Logger))
 
 	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok"})
+		c.JSON(200, gin.H{"status": "ok", "version": d.Version})
 	})
 
 	r.GET("/setup/status", setup.StatusCompleted)

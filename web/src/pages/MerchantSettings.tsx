@@ -85,7 +85,7 @@ export default function MerchantSettings() {
   }
 
   return (
-    <div style={{ width: '100%', maxWidth: 820, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div style={{ width: '100%', maxWidth: 820, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18, paddingBottom: 40 }}>
       <section className="ep-panel ep-settings-panel">
         <div className="ep-settings-head">
           <h3>基础信息</h3>

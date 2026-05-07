@@ -13,7 +13,7 @@ import {
   BookOutlined,
 } from '@ant-design/icons'
 import { useEffect, useState } from 'react'
-import { authApi, clearSession, getRole } from '../api'
+import { authApi, clearSession, getRole, fetchVersion } from '../api'
 
 const { Sider, Content } = AntLayout
 
@@ -40,6 +40,9 @@ export default function Layout() {
   const loc = useLocation()
   const [now, setNow] = useState<string>(() => formatNow())
   const [navOpen, setNavOpen] = useState(false)
+  const [ver, setVer] = useState('')
+
+  useEffect(() => { fetchVersion().then(setVer).catch(() => {}) }, [])
 
   useEffect(() => {
     const id = setInterval(() => setNow(formatNow()), 1000)
@@ -105,7 +108,7 @@ export default function Layout() {
           <div className="ep-brand-mark">{isAdmin ? 'ep' : 'mc'}</div>
           <div className="ep-brand-text">
             <span className="wordmark">{isAdmin ? '易支付' : '商户中心'}</span>
-            <span className="caption">{isAdmin ? '支付管理平台 · v0.1' : '易支付 · self-service'}</span>
+            <span className="caption">{isAdmin ? `支付管理平台${ver ? ' · ' + ver : ''}` : '易支付 · self-service'}</span>
           </div>
           <button
             type="button"

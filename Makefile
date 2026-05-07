@@ -66,8 +66,10 @@ web-build: web-deps
 # Single-binary production build: bundles the admin SPA into the Go binary
 # via go:embed. After `make build`, running `./bin/easypay` serves both the
 # API and the admin UI on one port — no separate Vite process needed.
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+
 build: web-build
-	CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/easypay ./backend/cmd/api
+	CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=$(VERSION)" -o bin/easypay ./backend/cmd/api
 
 tidy:
 	go mod tidy

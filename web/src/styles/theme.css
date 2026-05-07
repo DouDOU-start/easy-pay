@@ -2372,6 +2372,7 @@ textarea.ant-input {
 
 .ep-doc {
   max-width: 860px;
+  margin: 0 auto;
   padding: 8px 0 64px;
   opacity: 0;
   animation: fadeInUp 0.7s ease forwards;
