@@ -34,7 +34,7 @@ export default function MerchantDashboard() {
   const o = data?.overall
 
   const trendData = (data?.trend ?? []).map((d) => ({
-    date: d.date.slice(5),
+    date: d.date.slice(5, 10),
     amount: +(d.amount / 100).toFixed(2),
     count: d.count,
   }))

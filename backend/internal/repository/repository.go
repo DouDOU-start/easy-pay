@@ -731,12 +731,12 @@ func (r *dashboardRepo) PendingSettlementAmount(ctx context.Context) (int64, err
 func (r *dashboardRepo) Last7DaysPayments(ctx context.Context, merchantID int64) ([]DailyPayment, error) {
 	var list []DailyPayment
 	q := r.db.WithContext(ctx).Model(&model.Order{}).
-		Select("DATE(paid_at) as date, COALESCE(SUM(amount), 0) as amount, COUNT(*) as count").
+		Select("TO_CHAR(paid_at, 'YYYY-MM-DD') as date, COALESCE(SUM(amount), 0) as amount, COUNT(*) as count").
 		Where("paid_at >= CURRENT_DATE - INTERVAL '6 days' AND status IN ?", paidStatuses)
 	if merchantID > 0 {
 		q = q.Where("merchant_id = ?", merchantID)
 	}
-	err := q.Group("DATE(paid_at)").Order("date").Find(&list).Error
+	err := q.Group("TO_CHAR(paid_at, 'YYYY-MM-DD')").Order("date").Find(&list).Error
 	return list, err
 }
 func (r *dashboardRepo) RecentOrders(ctx context.Context, merchantID int64, limit int) ([]*model.Order, error) {

@@ -829,6 +829,14 @@ func (h *Handler) MerchantPeriodBalance(c *gin.Context) {
 		httputil.Fail500(c, "BALANCE_FAILED", "查询失败", err)
 		return
 	}
+	bal, err := h.balances.GetBalance(c.Request.Context(), merchantID)
+	if err != nil {
+		httputil.Fail500(c, "BALANCE_FAILED", "查询失败", err)
+		return
+	}
+	if pb.Amount > bal.Available {
+		pb.Amount = bal.Available
+	}
 	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": pb})
 }
 
@@ -933,11 +941,19 @@ func (h *Handler) CreateSettlement(c *gin.Context) {
 		httputil.Fail500(c, "BALANCE_FAILED", "查询余额失败", err)
 		return
 	}
-	if pb.Amount <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "INSUFFICIENT", "msg": "该周期内无可结算余额"})
+	bal, err := h.balances.GetBalance(c.Request.Context(), req.MerchantID)
+	if err != nil {
+		httputil.Fail500(c, "BALANCE_FAILED", "查询余额失败", err)
 		return
 	}
 	amount := pb.Amount
+	if amount > bal.Available {
+		amount = bal.Available
+	}
+	if amount <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "INSUFFICIENT", "msg": "该周期内无可结算余额"})
+		return
+	}
 	fee := int64(float64(amount) * req.FeeRate)
 	netAmount := amount - fee
 	s := &model.Settlement{
