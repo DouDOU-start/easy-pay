@@ -851,9 +851,6 @@ func (h *Handler) ListMerchantBalances(c *gin.Context) {
 	}
 	var rows []row
 	for _, m := range list {
-		if m.IsAdmin() {
-			continue
-		}
 		bal, err := h.balances.GetBalance(c.Request.Context(), m.ID)
 		if err != nil {
 			continue
