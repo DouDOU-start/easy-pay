@@ -54,8 +54,18 @@ body {
 .ep-sider {
   background: var(--bg-surface) !important;
   border-right: 1px solid var(--border-hairline);
-  position: relative;
+  position: sticky;
+  top: 0;
+  height: 100vh;
   z-index: 5;
+  overflow: hidden;
+}
+
+.ep-sider .ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 }
 
 .ep-sider::before {
@@ -75,6 +85,7 @@ body {
   gap: 14px;
   border-bottom: 1px solid var(--border-hairline);
   position: relative;
+  flex-shrink: 0;
 }
 
 .ep-brand-mark {
@@ -144,6 +155,9 @@ body {
   background: transparent !important;
   border: none !important;
   padding: 0 !important;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .ep-sider .ant-menu-item {
@@ -197,10 +211,7 @@ body {
 }
 
 .ep-sider-footer {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  flex-shrink: 0;
   padding: 20px 28px 24px;
   border-top: 1px solid var(--border-hairline);
   font-family: var(--font-body);
@@ -342,25 +353,6 @@ body {
   height: 100vh;
   overflow-y: auto;
   overflow-x: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.25) transparent;
-}
-
-.ep-main::-webkit-scrollbar {
-  width: 6px;
-}
-
-.ep-main::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.ep-main::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.25);
-  border-radius: 3px;
-}
-
-.ep-main:not(:hover)::-webkit-scrollbar-thumb {
-  background: transparent;
 }
 
 /* ------------------------------------------------------------------ */
@@ -368,7 +360,7 @@ body {
 /* ------------------------------------------------------------------ */
 
 .ep-content {
-  padding: 32px 56px 32px !important;
+  padding: 32px 56px 64px !important;
   background: transparent !important;
   position: relative;
   z-index: 2;
@@ -1419,22 +1411,31 @@ textarea.ant-input {
 /*  SCROLLBAR / SELECTION                                              */
 /* ------------------------------------------------------------------ */
 
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+*:hover {
+  scrollbar-color: rgba(255,255,255,0.15) transparent;
 }
 
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
 ::-webkit-scrollbar-track {
   background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: var(--border-subtle);
-  border-radius: 0;
+  background: transparent;
+  border-radius: 4px;
+  transition: background 0.3s;
 }
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-gold-dim);
+*:hover::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.15);
+}
+*:hover::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.3);
 }
 
 ::selection {

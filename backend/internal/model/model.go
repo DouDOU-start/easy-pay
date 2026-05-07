@@ -157,6 +157,32 @@ type NotifyLog struct {
 func (NotifyLog) TableName() string { return "notify_logs" }
 
 
+type SettlementStatus string
+
+const (
+	SettlementPending   SettlementStatus = "pending"
+	SettlementPaid      SettlementStatus = "paid"
+	SettlementCancelled SettlementStatus = "cancelled"
+)
+
+type Settlement struct {
+	ID           int64            `gorm:"primaryKey" json:"id"`
+	SettlementNo string           `gorm:"column:settlement_no;uniqueIndex;size:40" json:"settlement_no"`
+	MerchantID   int64            `gorm:"column:merchant_id;index" json:"merchant_id"`
+	Amount       int64            `json:"amount"`
+	Fee          int64            `json:"fee"`
+	NetAmount    int64            `gorm:"column:net_amount" json:"net_amount"`
+	PeriodStart  time.Time        `gorm:"column:period_start" json:"period_start"`
+	PeriodEnd    time.Time        `gorm:"column:period_end" json:"period_end"`
+	Status       SettlementStatus `gorm:"size:16" json:"status"`
+	Remark       string           `gorm:"size:256" json:"remark"`
+	PaidAt       *time.Time       `json:"paid_at"`
+	CreatedAt    time.Time        `json:"created_at"`
+	UpdatedAt    time.Time        `json:"updated_at"`
+}
+
+func (Settlement) TableName() string { return "settlements" }
+
 type SystemSetting struct {
 	Key       string    `gorm:"column:key;primaryKey;size:64" json:"key"`
 	Value     string    `gorm:"column:value" json:"value"`

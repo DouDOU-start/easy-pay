@@ -14,6 +14,10 @@ import PlatformChannels from './pages/PlatformChannels'
 import Settings from './pages/Settings'
 import Setup from './pages/Setup'
 import IntegrationDoc from './pages/IntegrationDoc'
+import Settlements from './pages/Settlements'
+import MerchantSettlements from './pages/MerchantSettlements'
+import AdminDashboard from './pages/AdminDashboard'
+import MerchantDashboard from './pages/MerchantDashboard'
 
 const AuthGuard = ({ children, requiredRole }: { children: JSX.Element; requiredRole?: string }) => {
   const token = localStorage.getItem(TOKEN_KEY)
@@ -67,16 +71,20 @@ function AppRoutes() {
           <Route index element={<RoleRedirect />} />
 
           {/* Admin management */}
+          <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="merchants" element={<Merchants />} />
           <Route path="orders" element={<Orders />} />
           <Route path="notify-logs" element={<NotifyLogs />} />
           <Route path="platform" element={<PlatformChannels />} />
+          <Route path="settlements" element={<Settlements />} />
           <Route path="settings" element={<Settings />} />
 
           {/* Personal (all roles) */}
+          <Route path="my-dashboard" element={<MerchantDashboard />} />
           <Route path="my-orders" element={<MerchantOrders />} />
           <Route path="my-notify-logs" element={<MerchantNotifyLogs />} />
           <Route path="my-settings" element={<MerchantSettings />} />
+          <Route path="my-settlements" element={<MerchantSettlements />} />
 
           {/* Docs */}
           <Route path="docs/integration" element={<IntegrationDoc />} />
@@ -88,7 +96,7 @@ function AppRoutes() {
 
 function RoleRedirect() {
   const role = getRole()
-  return <Navigate to={role === 'admin' ? '/merchants' : '/my-orders'} replace />
+  return <Navigate to={role === 'admin' ? '/dashboard' : '/my-dashboard'} replace />
 }
 
 export default function App() {

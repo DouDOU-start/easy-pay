@@ -145,6 +145,9 @@ func runNormalMode(cfg *config.Config) {
 	orderRepo := repository.NewOrderRepo(db)
 	refundRepo := repository.NewRefundRepo(db)
 	notifyLogRepo := repository.NewNotifyLogRepo(db)
+	settlementRepo := repository.NewSettlementRepo(db)
+	balanceRepo := repository.NewBalanceRepo(db)
+	dashboardRepo := repository.NewDashboardRepo(db)
 	settingsRepo := repository.NewSystemSettingRepo(db)
 
 	// --- services ---
@@ -176,8 +179,8 @@ func runNormalMode(cfg *config.Config) {
 	paymentH := api.NewPaymentHandler(paymentSvc, logger)
 	callbackH := callback.New(paymentSvc, reg, logger)
 	authH := auth.New(merchantRepo, rdb)
-	adminH := admin.New(merchantRepo, platformChRepo, orderRepo, refundRepo, notifyLogRepo, cipher, reg, paymentSvc, settingsRepo, logger)
-	merchantH := merchant.New(merchantRepo, orderRepo, notifyLogRepo)
+	adminH := admin.New(merchantRepo, platformChRepo, orderRepo, refundRepo, notifyLogRepo, settlementRepo, balanceRepo, dashboardRepo, cipher, reg, paymentSvc, settingsRepo, logger)
+	merchantH := merchant.New(merchantRepo, orderRepo, notifyLogRepo, settlementRepo, balanceRepo, dashboardRepo)
 
 	// --- router / server ---
 	gin.SetMode(cfg.Server.Mode)

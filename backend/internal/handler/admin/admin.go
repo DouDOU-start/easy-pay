@@ -33,6 +33,9 @@ type Handler struct {
 	orders      repository.OrderRepo
 	refunds     repository.RefundRepo
 	logs        repository.NotifyLogRepo
+	settlements repository.SettlementRepo
+	balances    repository.BalanceRepo
+	dashboard   repository.DashboardRepo
 	cipher      *crypto.AESGCM
 	registry    *registry.Registry
 	paymentSvc  *payment.Service
@@ -46,6 +49,9 @@ func New(
 	orders repository.OrderRepo,
 	refunds repository.RefundRepo,
 	logs repository.NotifyLogRepo,
+	settlements repository.SettlementRepo,
+	balances repository.BalanceRepo,
+	dashboard repository.DashboardRepo,
 	cipher *crypto.AESGCM,
 	reg *registry.Registry,
 	paymentSvc *payment.Service,
@@ -58,12 +64,51 @@ func New(
 		orders:      orders,
 		refunds:     refunds,
 		logs:        logs,
+		settlements: settlements,
+		balances:    balances,
+		dashboard:   dashboard,
 		cipher:      cipher,
 		registry:    reg,
 		paymentSvc:  paymentSvc,
 		settings:    settings,
 		log:         log,
 	}
+}
+
+// ---------- Dashboard ----------
+
+func (h *Handler) Dashboard(c *gin.Context) {
+	ctx := c.Request.Context()
+	todayCount, _ := h.dashboard.TodayOrderCount(ctx, 0)
+	todayPaid, _ := h.dashboard.TodayPaidAmount(ctx, 0)
+	todayRefund, _ := h.dashboard.TodayRefundAmount(ctx, 0)
+	totalMerchants, _ := h.dashboard.TotalMerchantCount(ctx)
+	totalOrders, _ := h.dashboard.TotalOrderCount(ctx, 0)
+	totalRevenue, _ := h.dashboard.TotalRevenue(ctx, 0)
+	pendingSettlement, _ := h.dashboard.PendingSettlementAmount(ctx)
+	trend, _ := h.dashboard.Last7DaysPayments(ctx, 0)
+	recentOrders, _ := h.dashboard.RecentOrders(ctx, 0, 10)
+	if trend == nil {
+		trend = []repository.DailyPayment{}
+	}
+	if recentOrders == nil {
+		recentOrders = []*model.Order{}
+	}
+	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": gin.H{
+		"today": gin.H{
+			"order_count":   todayCount,
+			"paid_amount":   todayPaid,
+			"refund_amount": todayRefund,
+		},
+		"overall": gin.H{
+			"total_merchants": totalMerchants,
+			"total_orders":    totalOrders,
+			"total_revenue":   totalRevenue,
+		},
+		"pending_settlement": pendingSettlement,
+		"trend":              trend,
+		"recent_orders":      recentOrders,
+	}})
 }
 
 // ---------- Merchants ----------
@@ -740,6 +785,136 @@ func (h *Handler) RetryNotify(c *gin.Context) {
 	n.ResponseBody = ""
 	if err := h.logs.Update(c.Request.Context(), n); err != nil {
 		httputil.Fail500(c, "UPDATE_FAILED", "更新失败，请稍后重试", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": "OK"})
+}
+
+// ---------- Settlements ----------
+
+func (h *Handler) MerchantBalance(c *gin.Context) {
+	merchantID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	bal, err := h.balances.GetBalance(c.Request.Context(), merchantID)
+	if err != nil {
+		httputil.Fail500(c, "BALANCE_FAILED", "查询余额失败", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": bal})
+}
+
+func (h *Handler) ListSettlements(c *gin.Context) {
+	page, size := httputil.ParsePage(c)
+	filter := repository.SettlementFilter{
+		Offset: (page - 1) * size,
+		Limit:  size,
+	}
+	if v := c.Query("merchant_id"); v != "" {
+		filter.MerchantID, _ = strconv.ParseInt(v, 10, 64)
+	}
+	if v := c.Query("status"); v != "" {
+		filter.Status = model.SettlementStatus(v)
+	}
+	list, total, err := h.settlements.List(c.Request.Context(), filter)
+	if err != nil {
+		httputil.Fail500(c, "LIST_FAILED", "查询失败", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": gin.H{
+		"list": list, "total": total, "page": page, "size": size,
+	}})
+}
+
+type createSettlementReq struct {
+	MerchantID  int64  `json:"merchant_id" binding:"required"`
+	Amount      int64  `json:"amount" binding:"required,min=1"`
+	Fee         int64  `json:"fee" binding:"min=0"`
+	PeriodStart string `json:"period_start" binding:"required"`
+	PeriodEnd   string `json:"period_end" binding:"required"`
+	Remark      string `json:"remark"`
+}
+
+func (h *Handler) CreateSettlement(c *gin.Context) {
+	var req createSettlementReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "msg": err.Error()})
+		return
+	}
+	if _, err := h.merchants.GetByID(c.Request.Context(), req.MerchantID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "msg": "商户不存在"})
+		return
+	}
+	bal, err := h.balances.GetBalance(c.Request.Context(), req.MerchantID)
+	if err != nil {
+		httputil.Fail500(c, "BALANCE_FAILED", "查询余额失败", err)
+		return
+	}
+	netAmount := req.Amount - req.Fee
+	if netAmount > bal.Available {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "INSUFFICIENT", "msg": fmt.Sprintf("可结算余额不足，当前可用 %d 分", bal.Available)})
+		return
+	}
+	periodStart, _ := time.Parse(time.RFC3339, req.PeriodStart)
+	periodEnd, _ := time.Parse(time.RFC3339, req.PeriodEnd)
+	s := &model.Settlement{
+		SettlementNo: idgen.OrderNo("ST"),
+		MerchantID:   req.MerchantID,
+		Amount:       req.Amount,
+		Fee:          req.Fee,
+		NetAmount:    netAmount,
+		PeriodStart:  periodStart,
+		PeriodEnd:    periodEnd,
+		Status:       model.SettlementPending,
+		Remark:       req.Remark,
+	}
+	if err := h.settlements.Create(c.Request.Context(), s); err != nil {
+		httputil.Fail500(c, "CREATE_FAILED", "创建结算单失败", err)
+		return
+	}
+	h.log.Info("settlement created",
+		zap.String("settlement_no", s.SettlementNo),
+		zap.Int64("merchant_id", req.MerchantID),
+		zap.Int64("net_amount", netAmount))
+	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": s})
+}
+
+func (h *Handler) MarkSettlementPaid(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	s, err := h.settlements.GetByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND"})
+		return
+	}
+	if s.Status != model.SettlementPending {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "INVALID_STATUS", "msg": "只有待结算状态可标记已打款"})
+		return
+	}
+	now := time.Now()
+	s.Status = model.SettlementPaid
+	s.PaidAt = &now
+	if err := h.settlements.Update(c.Request.Context(), s); err != nil {
+		httputil.Fail500(c, "UPDATE_FAILED", "更新失败", err)
+		return
+	}
+	h.log.Info("settlement marked paid",
+		zap.String("settlement_no", s.SettlementNo),
+		zap.Int64("merchant_id", s.MerchantID))
+	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": s})
+}
+
+func (h *Handler) CancelSettlement(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	s, err := h.settlements.GetByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND"})
+		return
+	}
+	if s.Status != model.SettlementPending {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "INVALID_STATUS", "msg": "只有待结算状态可取消"})
+		return
+	}
+	s.Status = model.SettlementCancelled
+	if err := h.settlements.Update(c.Request.Context(), s); err != nil {
+		httputil.Fail500(c, "UPDATE_FAILED", "更新失败", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": "OK"})

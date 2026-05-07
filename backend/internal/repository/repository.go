@@ -495,3 +495,212 @@ func (r *systemSettingRepo) GetAll(ctx context.Context) ([]*model.SystemSetting,
 	err := r.db.WithContext(ctx).Order(`"key" ASC`).Find(&list).Error
 	return list, err
 }
+
+// ---------- Settlement ----------
+
+type SettlementRepo interface {
+	Create(ctx context.Context, s *model.Settlement) error
+	Update(ctx context.Context, s *model.Settlement) error
+	GetByID(ctx context.Context, id int64) (*model.Settlement, error)
+	List(ctx context.Context, f SettlementFilter) ([]*model.Settlement, int64, error)
+	SumSettled(ctx context.Context, merchantID int64) (int64, error)
+}
+
+type SettlementFilter struct {
+	MerchantID int64
+	Status     model.SettlementStatus
+	Offset     int
+	Limit      int
+}
+
+type settlementRepo struct{ db *gorm.DB }
+
+func NewSettlementRepo(db *gorm.DB) SettlementRepo { return &settlementRepo{db: db} }
+
+func (r *settlementRepo) Create(ctx context.Context, s *model.Settlement) error {
+	return r.db.WithContext(ctx).Create(s).Error
+}
+func (r *settlementRepo) Update(ctx context.Context, s *model.Settlement) error {
+	return r.db.WithContext(ctx).Save(s).Error
+}
+func (r *settlementRepo) GetByID(ctx context.Context, id int64) (*model.Settlement, error) {
+	var s model.Settlement
+	err := r.db.WithContext(ctx).First(&s, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotFound
+	}
+	return &s, err
+}
+func (r *settlementRepo) List(ctx context.Context, f SettlementFilter) ([]*model.Settlement, int64, error) {
+	db := r.db.WithContext(ctx).Model(&model.Settlement{})
+	if f.MerchantID > 0 {
+		db = db.Where("merchant_id = ?", f.MerchantID)
+	}
+	if f.Status != "" {
+		db = db.Where("status = ?", f.Status)
+	}
+	var total int64
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var list []*model.Settlement
+	if err := db.Order("id DESC").Offset(f.Offset).Limit(f.Limit).Find(&list).Error; err != nil {
+		return nil, 0, err
+	}
+	return list, total, nil
+}
+func (r *settlementRepo) SumSettled(ctx context.Context, merchantID int64) (int64, error) {
+	var total int64
+	err := r.db.WithContext(ctx).
+		Model(&model.Settlement{}).
+		Where("merchant_id = ? AND status = ?", merchantID, model.SettlementPaid).
+		Select("COALESCE(SUM(net_amount), 0)").
+		Scan(&total).Error
+	return total, err
+}
+
+// MerchantBalance holds the computed financial summary for a merchant.
+type MerchantBalance struct {
+	MerchantID   int64 `json:"merchant_id"`
+	TotalIncome  int64 `json:"total_income"`
+	TotalRefund  int64 `json:"total_refund"`
+	TotalSettled int64 `json:"total_settled"`
+	Available    int64 `json:"available"`
+}
+
+type BalanceRepo interface {
+	GetBalance(ctx context.Context, merchantID int64) (*MerchantBalance, error)
+}
+
+type balanceRepo struct{ db *gorm.DB }
+
+func NewBalanceRepo(db *gorm.DB) BalanceRepo { return &balanceRepo{db: db} }
+
+func (r *balanceRepo) GetBalance(ctx context.Context, merchantID int64) (*MerchantBalance, error) {
+	var income int64
+	if err := r.db.WithContext(ctx).Model(&model.Order{}).
+		Where("merchant_id = ? AND status IN ?", merchantID, []model.OrderStatus{model.OrderPaid, model.OrderRefunded, model.OrderPartialRefunded}).
+		Select("COALESCE(SUM(amount), 0)").Scan(&income).Error; err != nil {
+		return nil, err
+	}
+	var refund int64
+	if err := r.db.WithContext(ctx).Model(&model.RefundOrder{}).
+		Where("merchant_id = ? AND status = ?", merchantID, model.RefundSuccess).
+		Select("COALESCE(SUM(amount), 0)").Scan(&refund).Error; err != nil {
+		return nil, err
+	}
+	var settled int64
+	if err := r.db.WithContext(ctx).Model(&model.Settlement{}).
+		Where("merchant_id = ? AND status = ?", merchantID, model.SettlementPaid).
+		Select("COALESCE(SUM(net_amount), 0)").Scan(&settled).Error; err != nil {
+		return nil, err
+	}
+	return &MerchantBalance{
+		MerchantID:   merchantID,
+		TotalIncome:  income,
+		TotalRefund:  refund,
+		TotalSettled: settled,
+		Available:    income - refund - settled,
+	}, nil
+}
+
+// ---------- Dashboard ----------
+
+type DailyPayment struct {
+	Date   string `json:"date"`
+	Amount int64  `json:"amount"`
+	Count  int64  `json:"count"`
+}
+
+type DashboardRepo interface {
+	TodayOrderCount(ctx context.Context, merchantID int64) (int64, error)
+	TodayPaidAmount(ctx context.Context, merchantID int64) (int64, error)
+	TodayRefundAmount(ctx context.Context, merchantID int64) (int64, error)
+	TotalMerchantCount(ctx context.Context) (int64, error)
+	TotalOrderCount(ctx context.Context, merchantID int64) (int64, error)
+	TotalRevenue(ctx context.Context, merchantID int64) (int64, error)
+	TotalRefund(ctx context.Context, merchantID int64) (int64, error)
+	PendingSettlementAmount(ctx context.Context) (int64, error)
+	Last7DaysPayments(ctx context.Context, merchantID int64) ([]DailyPayment, error)
+	RecentOrders(ctx context.Context, merchantID int64, limit int) ([]*model.Order, error)
+}
+
+type dashboardRepo struct{ db *gorm.DB }
+
+func NewDashboardRepo(db *gorm.DB) DashboardRepo { return &dashboardRepo{db: db} }
+
+var paidStatuses = []model.OrderStatus{model.OrderPaid, model.OrderRefunded, model.OrderPartialRefunded}
+
+func (r *dashboardRepo) scopeMerchant(db *gorm.DB, merchantID int64) *gorm.DB {
+	if merchantID > 0 {
+		return db.Where("merchant_id = ?", merchantID)
+	}
+	return db
+}
+
+func (r *dashboardRepo) TodayOrderCount(ctx context.Context, merchantID int64) (int64, error) {
+	var n int64
+	db := r.scopeMerchant(r.db.WithContext(ctx).Model(&model.Order{}).
+		Where("paid_at >= CURRENT_DATE AND status IN ?", paidStatuses), merchantID)
+	return n, db.Count(&n).Error
+}
+func (r *dashboardRepo) TodayPaidAmount(ctx context.Context, merchantID int64) (int64, error) {
+	var n int64
+	db := r.scopeMerchant(r.db.WithContext(ctx).Model(&model.Order{}).
+		Where("paid_at >= CURRENT_DATE AND status IN ?", paidStatuses), merchantID)
+	return n, db.Select("COALESCE(SUM(amount), 0)").Scan(&n).Error
+}
+func (r *dashboardRepo) TodayRefundAmount(ctx context.Context, merchantID int64) (int64, error) {
+	var n int64
+	db := r.scopeMerchant(r.db.WithContext(ctx).Model(&model.RefundOrder{}).
+		Where("created_at >= CURRENT_DATE AND status = ?", model.RefundSuccess), merchantID)
+	return n, db.Select("COALESCE(SUM(amount), 0)").Scan(&n).Error
+}
+func (r *dashboardRepo) TotalMerchantCount(ctx context.Context) (int64, error) {
+	var n int64
+	return n, r.db.WithContext(ctx).Model(&model.Merchant{}).Where("status = 1 AND role != 'admin'").Count(&n).Error
+}
+func (r *dashboardRepo) TotalOrderCount(ctx context.Context, merchantID int64) (int64, error) {
+	var n int64
+	db := r.scopeMerchant(r.db.WithContext(ctx).Model(&model.Order{}).
+		Where("status IN ?", paidStatuses), merchantID)
+	return n, db.Count(&n).Error
+}
+func (r *dashboardRepo) TotalRevenue(ctx context.Context, merchantID int64) (int64, error) {
+	var n int64
+	db := r.scopeMerchant(r.db.WithContext(ctx).Model(&model.Order{}).
+		Where("status IN ?", paidStatuses), merchantID)
+	return n, db.Select("COALESCE(SUM(amount), 0)").Scan(&n).Error
+}
+func (r *dashboardRepo) TotalRefund(ctx context.Context, merchantID int64) (int64, error) {
+	var n int64
+	db := r.scopeMerchant(r.db.WithContext(ctx).Model(&model.RefundOrder{}).
+		Where("status = ?", model.RefundSuccess), merchantID)
+	return n, db.Select("COALESCE(SUM(amount), 0)").Scan(&n).Error
+}
+func (r *dashboardRepo) PendingSettlementAmount(ctx context.Context) (int64, error) {
+	var n int64
+	return n, r.db.WithContext(ctx).Model(&model.Settlement{}).
+		Where("status = ?", model.SettlementPending).
+		Select("COALESCE(SUM(net_amount), 0)").Scan(&n).Error
+}
+func (r *dashboardRepo) Last7DaysPayments(ctx context.Context, merchantID int64) ([]DailyPayment, error) {
+	var list []DailyPayment
+	q := r.db.WithContext(ctx).Model(&model.Order{}).
+		Select("DATE(paid_at) as date, COALESCE(SUM(amount), 0) as amount, COUNT(*) as count").
+		Where("paid_at >= CURRENT_DATE - INTERVAL '6 days' AND status IN ?", paidStatuses)
+	if merchantID > 0 {
+		q = q.Where("merchant_id = ?", merchantID)
+	}
+	err := q.Group("DATE(paid_at)").Order("date").Find(&list).Error
+	return list, err
+}
+func (r *dashboardRepo) RecentOrders(ctx context.Context, merchantID int64, limit int) ([]*model.Order, error) {
+	var list []*model.Order
+	db := r.db.WithContext(ctx).Model(&model.Order{})
+	if merchantID > 0 {
+		db = db.Where("merchant_id = ?", merchantID)
+	}
+	err := db.Order("id DESC").Limit(limit).Find(&list).Error
+	return list, err
+}

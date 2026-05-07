@@ -107,6 +107,50 @@ export interface MerchantChannel {
   status: number
 }
 
+export interface Settlement {
+  id: number
+  settlement_no: string
+  merchant_id: number
+  amount: number
+  fee: number
+  net_amount: number
+  period_start: string
+  period_end: string
+  status: string
+  remark: string
+  paid_at: string | null
+  created_at: string
+}
+
+export interface MerchantBalance {
+  merchant_id: number
+  total_income: number
+  total_refund: number
+  total_settled: number
+  available: number
+}
+
+export interface DailyPayment {
+  date: string
+  amount: number
+  count: number
+}
+
+export interface AdminDashboard {
+  today: { order_count: number; paid_amount: number; refund_amount: number }
+  overall: { total_merchants: number; total_orders: number; total_revenue: number }
+  pending_settlement: number
+  trend: DailyPayment[]
+  recent_orders: Order[]
+}
+
+export interface MerchantDashboardData {
+  today: { order_count: number; paid_amount: number; refund_amount: number }
+  overall: { total_revenue: number; total_refund: number; available: number }
+  trend: DailyPayment[]
+  recent_orders: Order[]
+}
+
 export interface PageResult<T> {
   list: T[]
   total: number
@@ -144,6 +188,9 @@ export const authApi = {
 // --------------- admin ---------------
 
 export const adminApi = {
+  dashboard: () =>
+    http.get('/api/admin/dashboard').then(unwrap<AdminDashboard>),
+
   // merchants
   listMerchants: (params: Record<string, any>) =>
     http.get('/api/admin/merchants', { params }).then(unwrap<PageResult<Merchant>>),
@@ -200,6 +247,22 @@ export const adminApi = {
       serial_no: string; not_before: string; not_after: string; subject: string
     }>),
 
+  // settlements
+  merchantBalance: (merchantId: number) =>
+    http.get(`/api/admin/merchants/${merchantId}/balance`).then(unwrap<MerchantBalance>),
+
+  listSettlements: (params: Record<string, any>) =>
+    http.get('/api/admin/settlements', { params }).then(unwrap<PageResult<Settlement>>),
+
+  createSettlement: (data: { merchant_id: number; amount: number; fee: number; period_start: string; period_end: string; remark?: string }) =>
+    http.post('/api/admin/settlements', data).then(unwrap),
+
+  markSettlementPaid: (id: number) =>
+    http.post(`/api/admin/settlements/${id}/pay`).then(unwrap),
+
+  cancelSettlement: (id: number) =>
+    http.post(`/api/admin/settlements/${id}/cancel`),
+
   // settings
   getSettings: () =>
     http.get('/api/admin/settings').then(unwrap<Record<string, string>>),
@@ -211,6 +274,9 @@ export const adminApi = {
 // --------------- merchant self-service ---------------
 
 export const merchantApi = {
+  dashboard: () =>
+    http.get('/api/merchant/dashboard').then(unwrap<MerchantDashboardData>),
+
   me: () =>
     http.get('/api/merchant/me').then(unwrap<Merchant>),
 
@@ -228,4 +294,10 @@ export const merchantApi = {
 
   listNotifyLogs: (params: Record<string, any>) =>
     http.get('/api/merchant/notify_logs', { params }).then(unwrap<PageResult<NotifyLog>>),
+
+  balance: () =>
+    http.get('/api/merchant/balance').then(unwrap<MerchantBalance>),
+
+  listSettlements: (params: Record<string, any>) =>
+    http.get('/api/merchant/settlements', { params }).then(unwrap<PageResult<Settlement>>),
 }

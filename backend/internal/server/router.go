@@ -70,18 +70,22 @@ func NewRouter(d Deps) *gin.Engine {
 		authed.GET("/auth/me", d.Auth.Me)
 
 		// Merchant self-service
+		authed.GET("/merchant/dashboard", d.Merchant.Dashboard)
 		authed.GET("/merchant/me", d.Merchant.Me)
 		authed.PUT("/merchant/me", d.Merchant.UpdateProfile)
 		authed.PUT("/merchant/me/password", d.Merchant.ChangePassword)
 		authed.GET("/merchant/orders", d.Merchant.Orders)
 		authed.GET("/merchant/orders/:order_no", d.Merchant.OrderDetail)
 		authed.GET("/merchant/notify_logs", d.Merchant.NotifyLogs)
+		authed.GET("/merchant/balance", d.Merchant.Balance)
+		authed.GET("/merchant/settlements", d.Merchant.Settlements)
 	}
 
 	// Admin only
 	adminGrp := r.Group("/api/admin")
 	adminGrp.Use(d.Auth.Middleware(), auth.RequireAdmin())
 	{
+		adminGrp.GET("/dashboard", d.Admin.Dashboard)
 		adminGrp.GET("/merchants", d.Admin.ListMerchants)
 		adminGrp.POST("/merchants", d.Admin.CreateMerchant)
 		adminGrp.PUT("/merchants/:id", d.Admin.UpdateMerchant)
@@ -102,6 +106,12 @@ func NewRouter(d Deps) *gin.Engine {
 
 		adminGrp.GET("/notify_logs", d.Admin.ListNotifyLogs)
 		adminGrp.POST("/notify_logs/:id/retry", d.Admin.RetryNotify)
+
+		adminGrp.GET("/merchants/:id/balance", d.Admin.MerchantBalance)
+		adminGrp.GET("/settlements", d.Admin.ListSettlements)
+		adminGrp.POST("/settlements", d.Admin.CreateSettlement)
+		adminGrp.POST("/settlements/:id/pay", d.Admin.MarkSettlementPaid)
+		adminGrp.POST("/settlements/:id/cancel", d.Admin.CancelSettlement)
 
 		adminGrp.GET("/settings", d.Admin.GetSettings)
 		adminGrp.PUT("/settings", d.Admin.UpdateSettings)

@@ -15,17 +15,23 @@ import (
 )
 
 type Handler struct {
-	merchants repository.MerchantRepo
-	orders    repository.OrderRepo
-	logs      repository.NotifyLogRepo
+	merchants   repository.MerchantRepo
+	orders      repository.OrderRepo
+	logs        repository.NotifyLogRepo
+	settlements repository.SettlementRepo
+	balances    repository.BalanceRepo
+	dashboard   repository.DashboardRepo
 }
 
 func New(
 	merchants repository.MerchantRepo,
 	orders repository.OrderRepo,
 	logs repository.NotifyLogRepo,
+	settlements repository.SettlementRepo,
+	balances repository.BalanceRepo,
+	dashboard repository.DashboardRepo,
 ) *Handler {
-	return &Handler{merchants: merchants, orders: orders, logs: logs}
+	return &Handler{merchants: merchants, orders: orders, logs: logs, settlements: settlements, balances: balances, dashboard: dashboard}
 }
 
 // ---------- profile ----------
@@ -203,4 +209,88 @@ func (h *Handler) OrderDetail(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": o})
+}
+
+// ---------- dashboard ----------
+
+func (h *Handler) Dashboard(c *gin.Context) {
+	id, err := auth.CurrentUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"code": "AUTH_FAILED"})
+		return
+	}
+	ctx := c.Request.Context()
+	todayCount, _ := h.dashboard.TodayOrderCount(ctx, id)
+	todayPaid, _ := h.dashboard.TodayPaidAmount(ctx, id)
+	todayRefund, _ := h.dashboard.TodayRefundAmount(ctx, id)
+	totalRevenue, _ := h.dashboard.TotalRevenue(ctx, id)
+	totalRefund, _ := h.dashboard.TotalRefund(ctx, id)
+	bal, _ := h.balances.GetBalance(ctx, id)
+	trend, _ := h.dashboard.Last7DaysPayments(ctx, id)
+	recentOrders, _ := h.dashboard.RecentOrders(ctx, id, 10)
+	if trend == nil {
+		trend = []repository.DailyPayment{}
+	}
+	if recentOrders == nil {
+		recentOrders = []*model.Order{}
+	}
+	available := int64(0)
+	if bal != nil {
+		available = bal.Available
+	}
+	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": gin.H{
+		"today": gin.H{
+			"order_count":   todayCount,
+			"paid_amount":   todayPaid,
+			"refund_amount": todayRefund,
+		},
+		"overall": gin.H{
+			"total_revenue": totalRevenue,
+			"total_refund":  totalRefund,
+			"available":     available,
+		},
+		"trend":         trend,
+		"recent_orders": recentOrders,
+	}})
+}
+
+// ---------- settlements ----------
+
+func (h *Handler) Balance(c *gin.Context) {
+	id, err := auth.CurrentUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"code": "AUTH_FAILED"})
+		return
+	}
+	bal, err := h.balances.GetBalance(c.Request.Context(), id)
+	if err != nil {
+		httputil.Fail500(c, "BALANCE_FAILED", "查询余额失败", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": bal})
+}
+
+func (h *Handler) Settlements(c *gin.Context) {
+	id, err := auth.CurrentUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"code": "AUTH_FAILED"})
+		return
+	}
+	page, size := httputil.ParsePage(c)
+	filter := repository.SettlementFilter{
+		MerchantID: id,
+		Offset:     (page - 1) * size,
+		Limit:      size,
+	}
+	if v := c.Query("status"); v != "" {
+		filter.Status = model.SettlementStatus(v)
+	}
+	list, total, err := h.settlements.List(c.Request.Context(), filter)
+	if err != nil {
+		httputil.Fail500(c, "LIST_FAILED", "查询失败", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": gin.H{
+		"list": list, "total": total, "page": page, "size": size,
+	}})
 }

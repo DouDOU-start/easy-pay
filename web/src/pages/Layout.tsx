@@ -11,6 +11,8 @@ import {
   MenuOutlined,
   CloseOutlined,
   BookOutlined,
+  DollarOutlined,
+  DashboardOutlined,
 } from '@ant-design/icons'
 import { useEffect, useState } from 'react'
 import { authApi, clearSession, getRole, fetchVersion } from '../api'
@@ -18,14 +20,18 @@ import { authApi, clearSession, getRole, fetchVersion } from '../api'
 const { Sider, Content } = AntLayout
 
 const pageTitles: Record<string, { crumb: string; section: string }> = {
+  '/dashboard': { crumb: '仪表盘', section: '管理' },
   '/merchants': { crumb: '商户管理', section: '管理' },
   '/orders': { crumb: '订单中心', section: '管理' },
   '/notify-logs': { crumb: '通知日志', section: '管理' },
   '/platform': { crumb: '渠道凭证', section: '管理' },
+  '/settlements': { crumb: '结算管理', section: '管理' },
   '/settings': { crumb: '系统设置', section: '管理' },
+  '/my-dashboard': { crumb: '概览', section: '个人' },
   '/my-orders': { crumb: '我的订单', section: '个人' },
   '/my-notify-logs': { crumb: '我的通知', section: '个人' },
   '/my-settings': { crumb: '账户设置', section: '个人' },
+  '/my-settlements': { crumb: '我的结算', section: '个人' },
   '/docs/integration': { crumb: '对接文档', section: '文档' },
 }
 
@@ -67,9 +73,11 @@ export default function Layout() {
   const isAdmin = getRole() === 'admin'
 
   const personalItems = [
+    { key: '/my-dashboard', icon: <DashboardOutlined />, label: '概览' },
     { key: '/my-orders', icon: <FileTextOutlined />, label: '我的订单' },
     { key: '/my-notify-logs', icon: <BellOutlined />, label: '我的通知' },
     { key: '/my-settings', icon: <UserOutlined />, label: '账户设置' },
+    { key: '/my-settlements', icon: <DollarOutlined />, label: '我的结算' },
   ]
 
   const docItems = [
@@ -79,10 +87,12 @@ export default function Layout() {
   const items = isAdmin
     ? [
         { type: 'group' as const, label: '管理', children: [
+          { key: '/dashboard', icon: <DashboardOutlined />, label: '仪表盘' },
           { key: '/merchants', icon: <ShopOutlined />, label: '商户管理' },
           { key: '/orders', icon: <FileTextOutlined />, label: '订单中心' },
           { key: '/notify-logs', icon: <BellOutlined />, label: '通知日志' },
           { key: '/platform', icon: <ApiOutlined />, label: '渠道凭证' },
+          { key: '/settlements', icon: <DollarOutlined />, label: '结算管理' },
           { key: '/settings', icon: <SettingOutlined />, label: '系统设置' },
         ]},
         { type: 'group' as const, label: '个人', children: personalItems },
@@ -96,7 +106,7 @@ export default function Layout() {
   const current = pageTitles[loc.pathname] ?? { crumb: '概览', section: '控制台' }
 
   return (
-    <AntLayout className={`ep-shell${navOpen ? ' ep-shell--nav-open' : ''}`} style={{ minHeight: '100vh', background: 'transparent' }}>
+    <AntLayout className={`ep-shell${navOpen ? ' ep-shell--nav-open' : ''}`} style={{ height: '100vh', background: 'transparent', overflow: 'hidden' }}>
       <div
         className="ep-nav-backdrop"
         aria-hidden={!navOpen}
@@ -120,7 +130,6 @@ export default function Layout() {
           </button>
         </div>
 
-        <div className="ep-section-label">导航</div>
         <Menu
           mode="inline"
           selectedKeys={[loc.pathname]}
