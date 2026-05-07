@@ -554,8 +554,8 @@ func (r *settlementRepo) SumSettled(ctx context.Context, merchantID int64) (int6
 	var total int64
 	err := r.db.WithContext(ctx).
 		Model(&model.Settlement{}).
-		Where("merchant_id = ? AND status = ?", merchantID, model.SettlementPaid).
-		Select("COALESCE(SUM(net_amount), 0)").
+		Where("merchant_id = ? AND status IN ?", merchantID, []model.SettlementStatus{model.SettlementPaid, model.SettlementPending}).
+		Select("COALESCE(SUM(amount), 0)").
 		Scan(&total).Error
 	return total, err
 }
@@ -613,8 +613,8 @@ func (r *balanceRepo) GetBalance(ctx context.Context, merchantID int64) (*Mercha
 	}
 	var settled int64
 	if err := r.db.WithContext(ctx).Model(&model.Settlement{}).
-		Where("merchant_id = ? AND status = ?", merchantID, model.SettlementPaid).
-		Select("COALESCE(SUM(net_amount), 0)").Scan(&settled).Error; err != nil {
+		Where("merchant_id = ? AND status IN ?", merchantID, []model.SettlementStatus{model.SettlementPaid, model.SettlementPending}).
+		Select("COALESCE(SUM(amount), 0)").Scan(&settled).Error; err != nil {
 		return nil, err
 	}
 	return &MerchantBalance{
@@ -726,7 +726,7 @@ func (r *dashboardRepo) PendingSettlementAmount(ctx context.Context) (int64, err
 	var n int64
 	return n, r.db.WithContext(ctx).Model(&model.Settlement{}).
 		Where("status = ?", model.SettlementPending).
-		Select("COALESCE(SUM(net_amount), 0)").Scan(&n).Error
+		Select("COALESCE(SUM(amount), 0)").Scan(&n).Error
 }
 func (r *dashboardRepo) Last7DaysPayments(ctx context.Context, merchantID int64) ([]DailyPayment, error) {
 	var list []DailyPayment
