@@ -108,6 +108,7 @@ func NewRouter(d Deps) *gin.Engine {
 		adminGrp.POST("/notify_logs/:id/retry", d.Admin.RetryNotify)
 
 		adminGrp.GET("/merchants/:id/balance", d.Admin.MerchantBalance)
+		adminGrp.GET("/settlements/balances", d.Admin.ListMerchantBalances)
 		adminGrp.GET("/settlements", d.Admin.ListSettlements)
 		adminGrp.POST("/settlements", d.Admin.CreateSettlement)
 		adminGrp.POST("/settlements/:id/pay", d.Admin.MarkSettlementPaid)

@@ -833,13 +833,55 @@ func (h *Handler) ListSettlements(c *gin.Context) {
 	}})
 }
 
+func (h *Handler) ListMerchantBalances(c *gin.Context) {
+	list, _, err := h.merchants.List(c.Request.Context(), repository.MerchantFilter{Offset: 0, Limit: 500})
+	if err != nil {
+		httputil.Fail500(c, "LIST_FAILED", "查询失败", err)
+		return
+	}
+	type row struct {
+		MerchantID   int64  `json:"merchant_id"`
+		Name         string `json:"name"`
+		MchNo        string `json:"mch_no"`
+		TotalIncome  int64  `json:"total_income"`
+		TotalRefund  int64  `json:"total_refund"`
+		TotalSettled int64  `json:"total_settled"`
+		Available    int64  `json:"available"`
+		PeriodStart  string `json:"period_start"`
+	}
+	var rows []row
+	for _, m := range list {
+		if m.IsAdmin() {
+			continue
+		}
+		bal, err := h.balances.GetBalance(c.Request.Context(), m.ID)
+		if err != nil {
+			continue
+		}
+		ps := m.CreatedAt.Format("2006-01-02")
+		if last, err := h.settlements.LastPaidEndTime(c.Request.Context(), m.ID); err == nil && last != nil {
+			ps = last.Format("2006-01-02")
+		}
+		rows = append(rows, row{
+			MerchantID:   m.ID,
+			Name:         m.Name,
+			MchNo:        m.MchNo,
+			TotalIncome:  bal.TotalIncome,
+			TotalRefund:  bal.TotalRefund,
+			TotalSettled: bal.TotalSettled,
+			Available:    bal.Available,
+			PeriodStart:  ps,
+		})
+	}
+	if rows == nil {
+		rows = []row{}
+	}
+	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": rows})
+}
+
 type createSettlementReq struct {
-	MerchantID  int64  `json:"merchant_id" binding:"required"`
-	Amount      int64  `json:"amount" binding:"required,min=1"`
-	Fee         int64  `json:"fee" binding:"min=0"`
-	PeriodStart string `json:"period_start" binding:"required"`
-	PeriodEnd   string `json:"period_end" binding:"required"`
-	Remark      string `json:"remark"`
+	MerchantID int64  `json:"merchant_id" binding:"required"`
+	Remark     string `json:"remark"`
 }
 
 func (h *Handler) CreateSettlement(c *gin.Context) {
@@ -848,7 +890,8 @@ func (h *Handler) CreateSettlement(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "msg": err.Error()})
 		return
 	}
-	if _, err := h.merchants.GetByID(c.Request.Context(), req.MerchantID); err != nil {
+	m, err := h.merchants.GetByID(c.Request.Context(), req.MerchantID)
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "msg": "商户不存在"})
 		return
 	}
@@ -857,21 +900,32 @@ func (h *Handler) CreateSettlement(c *gin.Context) {
 		httputil.Fail500(c, "BALANCE_FAILED", "查询余额失败", err)
 		return
 	}
-	netAmount := req.Amount - req.Fee
-	if netAmount > bal.Available {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "INSUFFICIENT", "msg": fmt.Sprintf("可结算余额不足，当前可用 %d 分", bal.Available)})
+	if bal.Available <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "INSUFFICIENT", "msg": "无可结算余额"})
 		return
 	}
-	periodStart, _ := time.Parse(time.RFC3339, req.PeriodStart)
-	periodEnd, _ := time.Parse(time.RFC3339, req.PeriodEnd)
+	feeRate := 0.0
+	if v, err := h.settings.Get(c.Request.Context(), "fee_rate"); err == nil && v != "" {
+		if r, err := strconv.ParseFloat(v, 64); err == nil {
+			feeRate = r
+		}
+	}
+	amount := bal.Available
+	fee := int64(float64(amount) * feeRate)
+	netAmount := amount - fee
+	now := time.Now()
+	periodStart := m.CreatedAt
+	if last, err := h.settlements.LastPaidEndTime(c.Request.Context(), req.MerchantID); err == nil && last != nil {
+		periodStart = *last
+	}
 	s := &model.Settlement{
 		SettlementNo: idgen.OrderNo("ST"),
 		MerchantID:   req.MerchantID,
-		Amount:       req.Amount,
-		Fee:          req.Fee,
+		Amount:       amount,
+		Fee:          fee,
 		NetAmount:    netAmount,
 		PeriodStart:  periodStart,
-		PeriodEnd:    periodEnd,
+		PeriodEnd:    now,
 		Status:       model.SettlementPending,
 		Remark:       req.Remark,
 	}
@@ -882,6 +936,8 @@ func (h *Handler) CreateSettlement(c *gin.Context) {
 	h.log.Info("settlement created",
 		zap.String("settlement_no", s.SettlementNo),
 		zap.Int64("merchant_id", req.MerchantID),
+		zap.Int64("amount", amount),
+		zap.Int64("fee", fee),
 		zap.Int64("net_amount", netAmount))
 	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": s})
 }

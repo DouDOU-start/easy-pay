@@ -504,6 +504,7 @@ type SettlementRepo interface {
 	GetByID(ctx context.Context, id int64) (*model.Settlement, error)
 	List(ctx context.Context, f SettlementFilter) ([]*model.Settlement, int64, error)
 	SumSettled(ctx context.Context, merchantID int64) (int64, error)
+	LastPaidEndTime(ctx context.Context, merchantID int64) (*time.Time, error)
 }
 
 type SettlementFilter struct {
@@ -557,6 +558,20 @@ func (r *settlementRepo) SumSettled(ctx context.Context, merchantID int64) (int6
 		Select("COALESCE(SUM(net_amount), 0)").
 		Scan(&total).Error
 	return total, err
+}
+func (r *settlementRepo) LastPaidEndTime(ctx context.Context, merchantID int64) (*time.Time, error) {
+	var s model.Settlement
+	err := r.db.WithContext(ctx).
+		Where("merchant_id = ? AND status IN ?", merchantID, []model.SettlementStatus{model.SettlementPaid, model.SettlementPending}).
+		Order("period_end DESC").
+		First(&s).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &s.PeriodEnd, nil
 }
 
 // MerchantBalance holds the computed financial summary for a merchant.

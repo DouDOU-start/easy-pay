@@ -1,108 +1,62 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Table, Tag, Select, Button, Modal, Form, InputNumber, Input, DatePicker, message, Tooltip } from 'antd'
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { Table, Tag, Select, Button, Modal, Input, message, Tooltip, Tabs } from 'antd'
+import { ReloadOutlined } from '@ant-design/icons'
 import { adminApi } from '../api'
-import type { Merchant } from '../api'
+import type { MerchantBalanceRow } from '../api'
 
-const statusColor: Record<string, string> = {
-  pending: 'orange',
-  paid: 'green',
-  cancelled: 'default',
-}
-const statusLabel: Record<string, string> = {
-  pending: '待打款',
-  paid: '已打款',
-  cancelled: '已取消',
-}
-
-function TimeCell({ value }: { value?: string }) {
-  if (!value) return <span style={{ color: 'var(--text-faint)' }}>—</span>
-  const short = value.slice(0, 10)
-  return (
-    <Tooltip title={value}>
-      <span className="mono" style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{short}</span>
-    </Tooltip>
-  )
-}
+const statusColor: Record<string, string> = { pending: 'orange', paid: 'green', cancelled: 'default' }
+const statusLabel: Record<string, string> = { pending: '待打款', paid: '已打款', cancelled: '已取消' }
 
 export default function Settlements() {
+  const [tab, setTab] = useState('balances')
+  const [balances, setBalances] = useState<MerchantBalanceRow[]>([])
   const [list, setList] = useState<any[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [size] = useState(20)
-  const [filter, setFilter] = useState<{ status?: string; merchant_id?: string }>({})
-  const [merchants, setMerchants] = useState<Merchant[]>([])
-  const [createOpen, setCreateOpen] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const [balance, setBalance] = useState<any>(null)
-  const [form] = Form.useForm()
+  const [filter, setFilter] = useState<{ status?: string }>({})
+  const [settleTarget, setSettleTarget] = useState<MerchantBalanceRow | null>(null)
+  const [remark, setRemark] = useState('')
+  const [settling, setSettling] = useState(false)
 
-  const load = async () => {
+  const loadBalances = async () => {
+    try {
+      const data = await adminApi.listMerchantBalances()
+      setBalances(data ?? [])
+    } catch {}
+  }
+  const loadHistory = async () => {
     const result = await adminApi.listSettlements({ page, size, ...filter })
     setList(result.list ?? [])
     setTotal(result.total ?? 0)
   }
-  const loadMerchants = async () => {
-    const result = await adminApi.listMerchants({ page: 1, size: 500 })
-    setMerchants(result.list)
-  }
-  useEffect(() => { load() }, [page, filter])
-  useEffect(() => { loadMerchants() }, [])
 
-  const merchantMap = useMemo(() => {
-    const m = new Map<number, Merchant>()
-    merchants.forEach((x) => m.set(x.id, x))
-    return m
-  }, [merchants])
+  useEffect(() => { loadBalances() }, [])
+  useEffect(() => { if (tab === 'history') loadHistory() }, [tab, page, filter])
 
   const stats = useMemo(() => {
-    const pendingList = list.filter((s) => s.status === 'pending')
-    const paidList = list.filter((s) => s.status === 'paid')
-    return {
-      total,
-      pendingCount: pendingList.length,
-      paidCount: paidList.length,
-      pendingAmount: (pendingList.reduce((s, r) => s + r.net_amount, 0) / 100).toFixed(2),
-    }
-  }, [list, total])
+    const totalAvailable = balances.reduce((s, b) => s + b.available, 0)
+    const withBalance = balances.filter((b) => b.available > 0).length
+    return { totalAvailable, withBalance, merchantCount: balances.length }
+  }, [balances])
 
-  const openCreate = async () => {
-    if (merchants.length === 0) await loadMerchants()
-    form.resetFields()
-    setBalance(null)
-    setCreateOpen(true)
-  }
-
-  const onMerchantSelect = async (merchantId: number) => {
+  const submitSettle = async () => {
+    if (!settleTarget) return
+    setSettling(true)
     try {
-      const bal = await adminApi.merchantBalance(merchantId)
-      setBalance(bal)
-    } catch { setBalance(null) }
-  }
-
-  const submitCreate = async () => {
-    const v = await form.validateFields()
-    setCreating(true)
-    try {
-      await adminApi.createSettlement({
-        merchant_id: v.merchant_id,
-        amount: v.amount,
-        fee: v.fee || 0,
-        period_start: v.period[0].toISOString(),
-        period_end: v.period[1].toISOString(),
-        remark: v.remark || '',
-      })
+      await adminApi.createSettlement({ merchant_id: settleTarget.merchant_id, remark })
       message.success('结算单已创建')
-      setCreateOpen(false)
-      load()
+      setSettleTarget(null)
+      setRemark('')
+      loadBalances()
     } catch (e: any) {
       message.error(e.response?.data?.msg || '创建失败')
     } finally {
-      setCreating(false)
+      setSettling(false)
     }
   }
 
-  const markPaid = async (id: number) => {
+  const markPaid = (id: number) => {
     Modal.confirm({
       title: '确认已打款？',
       content: '请确认已通过银行转账完成打款',
@@ -113,7 +67,7 @@ export default function Settlements() {
         try {
           await adminApi.markSettlementPaid(id)
           message.success('已标记打款')
-          load()
+          loadHistory()
         } catch (e: any) {
           message.error(e.response?.data?.msg || '操作失败')
         }
@@ -125,7 +79,7 @@ export default function Settlements() {
     try {
       await adminApi.cancelSettlement(id)
       message.success('已取消')
-      load()
+      loadHistory()
     } catch (e: any) {
       message.error(e.response?.data?.msg || '操作失败')
     }
@@ -135,197 +89,156 @@ export default function Settlements() {
     <>
       <div className="ep-stat-strip">
         <div className="ep-stat">
-          <div className="label">结算总数</div>
-          <div className="value"><span className="mono">{String(stats.total).padStart(3, '0')}</span></div>
+          <div className="label">商户数</div>
+          <div className="value"><span className="mono">{String(stats.merchantCount).padStart(2, '0')}</span></div>
           <div className="trend">● 全部</div>
         </div>
         <div className="ep-stat">
-          <div className="label">待打款</div>
-          <div className="value"><span className="mono">{String(stats.pendingCount).padStart(2, '0')}</span></div>
-          <div className="trend dim">○ 等待中</div>
+          <div className="label">有余额商户</div>
+          <div className="value"><span className="mono">{String(stats.withBalance).padStart(2, '0')}</span></div>
+          <div className="trend">● 可结算</div>
         </div>
         <div className="ep-stat">
-          <div className="label">已打款</div>
-          <div className="value"><span className="mono">{String(stats.paidCount).padStart(2, '0')}</span></div>
-          <div className="trend">● 已完成</div>
-        </div>
-        <div className="ep-stat">
-          <div className="label">待打款金额</div>
-          <div className="value">¥<span className="mono">{stats.pendingAmount}</span></div>
+          <div className="label">平台待结算总额</div>
+          <div className="value">¥<span className="mono">{(stats.totalAvailable / 100).toFixed(2)}</span></div>
           <div className="trend dim">● 人民币</div>
         </div>
       </div>
 
-      <div className="ep-filter-bar">
-        <span className="ep-filter-label">筛选</span>
-        <Select
-          placeholder="状态"
-          allowClear
-          style={{ width: 150 }}
-          onChange={(v) => setFilter({ ...filter, status: v })}
-          options={[
-            { value: 'pending', label: '待打款' },
-            { value: 'paid', label: '已打款' },
-            { value: 'cancelled', label: '已取消' },
-          ]}
-        />
-        <Select
-          placeholder="商户"
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          style={{ width: 220 }}
-          onChange={(v) => setFilter({ ...filter, merchant_id: v ? String(v) : undefined })}
-          options={merchants.map((m) => ({ value: m.id, label: `${m.name} · ${m.mch_no}` }))}
-        />
-        <div className="ep-filter-actions">
-          <Button icon={<ReloadOutlined />} onClick={load}>刷新</Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建结算</Button>
-        </div>
-      </div>
-
-      <Table
-        rowKey="id"
-        dataSource={list}
-        sticky
-        pagination={{
-          current: page,
-          pageSize: size,
-          total,
-          onChange: setPage,
-          showTotal: (t) => `共 ${t} 条`,
-        }}
-        scroll={{ x: 'max-content', y: '100%' }}
-        columns={[
+      <Tabs
+        activeKey={tab}
+        onChange={setTab}
+        style={{ marginBottom: 0 }}
+        items={[
           {
-            title: '结算单号',
-            dataIndex: 'settlement_no',
-            width: 240,
-            render: (v: string) => <span className="tracked-id">{v}</span>,
-          },
-          {
-            title: '商户',
-            dataIndex: 'merchant_id',
-            width: 150,
-            ellipsis: true,
-            render: (v: number) => {
-              const m = merchantMap.get(v)
-              return <Tooltip title={m ? `${m.name} · ${m.mch_no}` : `#${v}`}>
-                <span>{m?.name || `#${v}`}</span>
-              </Tooltip>
-            },
-          },
-          {
-            title: '结算金额',
-            dataIndex: 'amount',
-            width: 120,
-            render: (v: number) => <span className="money">¥{(v / 100).toFixed(2)}</span>,
-          },
-          {
-            title: '手续费',
-            dataIndex: 'fee',
-            width: 100,
-            render: (v: number) => <span style={{ color: 'var(--text-secondary)' }}>¥{(v / 100).toFixed(2)}</span>,
-          },
-          {
-            title: '实付金额',
-            dataIndex: 'net_amount',
-            width: 120,
-            render: (v: number) => <span className="money" style={{ color: 'var(--accent-emerald)' }}>¥{(v / 100).toFixed(2)}</span>,
-          },
-          {
-            title: '结算周期',
-            width: 200,
-            render: (_: any, row: any) => (
-              <span className="mono" style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                {row.period_start?.slice(0, 10)} ~ {row.period_end?.slice(0, 10)}
-              </span>
+            key: 'balances',
+            label: '商户余额',
+            children: (
+              <>
+                <div className="ep-filter-bar" style={{ marginTop: 12 }}>
+                  <div className="ep-filter-actions">
+                    <Button icon={<ReloadOutlined />} onClick={loadBalances}>刷新</Button>
+                  </div>
+                </div>
+                <div>
+                  <Table
+                    rowKey="merchant_id"
+                    dataSource={balances}
+                    pagination={false}
+                    size="small"
+                    scroll={{ x: 'max-content' }}
+                    columns={[
+                      { title: '商户号', dataIndex: 'mch_no', width: 180, render: (v: string) => <span className="tracked-id">{v}</span> },
+                      { title: '商户名称', dataIndex: 'name', width: 150 },
+                      { title: '总收入', dataIndex: 'total_income', width: 130, render: (v: number) => <span className="money">¥{(v / 100).toFixed(2)}</span> },
+                      { title: '已退款', dataIndex: 'total_refund', width: 130, render: (v: number) => <span style={{ color: 'var(--text-secondary)' }}>¥{(v / 100).toFixed(2)}</span> },
+                      { title: '已结算', dataIndex: 'total_settled', width: 130, render: (v: number) => <span style={{ color: 'var(--text-secondary)' }}>¥{(v / 100).toFixed(2)}</span> },
+                      {
+                        title: '可结算余额', dataIndex: 'available', width: 140,
+                        render: (v: number) => <span className="money" style={{ color: v > 0 ? 'var(--accent-emerald)' : 'var(--text-faint)' }}>¥{(v / 100).toFixed(2)}</span>,
+                      },
+                      {
+                        title: '操作', width: 100, fixed: 'right' as const,
+                        render: (_: any, row: MerchantBalanceRow) => row.available > 0
+                          ? <Button type="link" size="small" onClick={() => { setSettleTarget(row); setRemark('') }}>结算</Button>
+                          : <span style={{ color: 'var(--text-faint)', fontSize: 12 }}>无余额</span>,
+                      },
+                    ]}
+                  />
+                </div>
+              </>
             ),
           },
           {
-            title: '状态',
-            dataIndex: 'status',
-            width: 100,
-            render: (s: string) => <Tag color={statusColor[s] || 'default'}>{statusLabel[s] || s}</Tag>,
-          },
-          {
-            title: '打款时间',
-            dataIndex: 'paid_at',
-            width: 120,
-            render: (v: string) => <TimeCell value={v} />,
-          },
-          {
-            title: '创建时间',
-            dataIndex: 'created_at',
-            width: 120,
-            render: (v: string) => <TimeCell value={v} />,
-          },
-          {
-            title: '备注',
-            dataIndex: 'remark',
-            width: 150,
-            ellipsis: true,
-            render: (v: string) => v || <span style={{ color: 'var(--text-faint)' }}>—</span>,
-          },
-          {
-            title: '操作',
-            width: 140,
-            fixed: 'right' as const,
-            render: (_: any, row: any) => {
-              if (row.status !== 'pending') return null
-              return (
-                <span style={{ display: 'flex', gap: 4 }}>
-                  <Button type="link" size="small" onClick={() => markPaid(row.id)}>确认打款</Button>
-                  <Button type="link" size="small" danger onClick={() => cancel(row.id)}>取消</Button>
-                </span>
-              )
-            },
+            key: 'history',
+            label: '结算记录',
+            children: (
+              <>
+                <div className="ep-filter-bar" style={{ marginTop: 12 }}>
+                  <span className="ep-filter-label">筛选</span>
+                  <Select
+                    placeholder="状态"
+                    allowClear
+                    style={{ width: 150 }}
+                    onChange={(v) => { setPage(1); setFilter({ status: v }) }}
+                    options={[
+                      { value: 'pending', label: '待打款' },
+                      { value: 'paid', label: '已打款' },
+                      { value: 'cancelled', label: '已取消' },
+                    ]}
+                  />
+                  <div className="ep-filter-actions">
+                    <Button icon={<ReloadOutlined />} onClick={loadHistory}>刷新</Button>
+                  </div>
+                </div>
+                <div>
+                  <Table
+                    rowKey="id"
+                    dataSource={list}
+                    pagination={{ current: page, pageSize: size, total, onChange: setPage, showTotal: (t) => `共 ${t} 条` }}
+                    size="small"
+                    scroll={{ x: 'max-content' }}
+                    columns={[
+                      { title: '结算单号', dataIndex: 'settlement_no', width: 220, render: (v: string) => <span className="tracked-id">{v}</span> },
+                      { title: '结算金额', dataIndex: 'amount', width: 120, render: (v: number) => <span className="money">¥{(v / 100).toFixed(2)}</span> },
+                      { title: '手续费', dataIndex: 'fee', width: 100, render: (v: number) => <span style={{ color: 'var(--text-secondary)' }}>¥{(v / 100).toFixed(2)}</span> },
+                      { title: '实付金额', dataIndex: 'net_amount', width: 120, render: (v: number) => <span className="money" style={{ color: 'var(--accent-emerald)' }}>¥{(v / 100).toFixed(2)}</span> },
+                      { title: '状态', dataIndex: 'status', width: 100, render: (s: string) => <Tag color={statusColor[s] || 'default'}>{statusLabel[s] || s}</Tag> },
+                      {
+                        title: '打款时间', dataIndex: 'paid_at', width: 120,
+                        render: (v: string) => v ? <Tooltip title={v}><span className="mono" style={{ fontSize: 11, color: 'var(--accent-emerald)' }}>{v.slice(0, 10)}</span></Tooltip> : <span style={{ color: 'var(--text-faint)' }}>—</span>,
+                      },
+                      {
+                        title: '创建时间', dataIndex: 'created_at', width: 120,
+                        render: (v: string) => <Tooltip title={v}><span className="mono" style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{v?.slice(0, 10)}</span></Tooltip>,
+                      },
+                      { title: '备注', dataIndex: 'remark', width: 150, ellipsis: true, render: (v: string) => v || <span style={{ color: 'var(--text-faint)' }}>—</span> },
+                      {
+                        title: '操作', width: 140, fixed: 'right' as const,
+                        render: (_: any, row: any) => row.status === 'pending' ? (
+                          <span style={{ display: 'flex', gap: 4 }}>
+                            <Button type="link" size="small" onClick={() => markPaid(row.id)}>确认打款</Button>
+                            <Button type="link" size="small" danger onClick={() => cancel(row.id)}>取消</Button>
+                          </span>
+                        ) : null,
+                      },
+                    ]}
+                  />
+                </div>
+              </>
+            ),
           },
         ]}
       />
 
       <Modal
-        title="新建结算单"
-        open={createOpen}
-        onOk={submitCreate}
-        onCancel={() => setCreateOpen(false)}
-        confirmLoading={creating}
-        okText="创建"
+        title="确认结算"
+        open={!!settleTarget}
+        onOk={submitSettle}
+        onCancel={() => setSettleTarget(null)}
+        confirmLoading={settling}
+        okText="确认结算"
         cancelText="取消"
         centered
       >
-        <Form form={form} layout="vertical" requiredMark={false}>
-          <Form.Item name="merchant_id" label="商户" rules={[{ required: true }]}>
-            <Select
-              placeholder="选择商户"
-              showSearch
-              optionFilterProp="label"
-              options={merchants.map((m) => ({ value: m.id, label: `${m.mch_no} · ${m.name}` }))}
-              onChange={onMerchantSelect}
-            />
-          </Form.Item>
-          {balance && (
-            <div style={{ marginBottom: 16, padding: '12px 16px', background: 'var(--bg-card)', borderRadius: 8, fontSize: 12, color: 'var(--text-tertiary)' }}>
-              <div>总收入：¥{(balance.total_income / 100).toFixed(2)}</div>
-              <div>已退款：¥{(balance.total_refund / 100).toFixed(2)}</div>
-              <div>已结算：¥{(balance.total_settled / 100).toFixed(2)}</div>
-              <div style={{ color: 'var(--accent-emerald)', fontWeight: 600 }}>可结算：¥{(balance.available / 100).toFixed(2)}</div>
+        {settleTarget && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ padding: '16px', background: 'var(--bg-elevated)', borderRadius: 8, marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>{settleTarget.name} · {settleTarget.mch_no}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+                <div>总收入：<span className="mono">¥{(settleTarget.total_income / 100).toFixed(2)}</span></div>
+                <div>已退款：<span className="mono">¥{(settleTarget.total_refund / 100).toFixed(2)}</span></div>
+                <div>已结算：<span className="mono">¥{(settleTarget.total_settled / 100).toFixed(2)}</span></div>
+                <div>结算周期：<span className="mono">{settleTarget.period_start} ~ 今天</span></div>
+              </div>
+              <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--bg-base)', borderRadius: 6, color: 'var(--accent-emerald)', fontWeight: 600, fontSize: 14, textAlign: 'center' }}>
+                本次结算：<span className="mono">¥{(settleTarget.available / 100).toFixed(2)}</span>
+              </div>
             </div>
-          )}
-          <Form.Item name="period" label="结算周期" rules={[{ required: true }]}>
-            <DatePicker.RangePicker style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="amount" label="结算金额（分）" rules={[{ required: true }]}
-            extra={balance ? `最大可结 ${balance.available} 分` : ''}>
-            <InputNumber min={1} max={balance?.available} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="fee" label="手续费（分）" initialValue={0}>
-            <InputNumber min={0} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="remark" label="备注">
-            <Input.TextArea rows={2} placeholder="可选" />
-          </Form.Item>
-        </Form>
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 8 }}>备注（可选）</div>
+            <Input.TextArea rows={2} value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="可选" />
+          </div>
+        )}
       </Modal>
     </>
   )

@@ -122,6 +122,17 @@ export interface Settlement {
   created_at: string
 }
 
+export interface MerchantBalanceRow {
+  merchant_id: number
+  name: string
+  mch_no: string
+  total_income: number
+  total_refund: number
+  total_settled: number
+  available: number
+  period_start: string
+}
+
 export interface MerchantBalance {
   merchant_id: number
   total_income: number
@@ -254,7 +265,10 @@ export const adminApi = {
   listSettlements: (params: Record<string, any>) =>
     http.get('/api/admin/settlements', { params }).then(unwrap<PageResult<Settlement>>),
 
-  createSettlement: (data: { merchant_id: number; amount: number; fee: number; period_start: string; period_end: string; remark?: string }) =>
+  listMerchantBalances: () =>
+    http.get('/api/admin/settlements/balances').then(unwrap<MerchantBalanceRow[]>),
+
+  createSettlement: (data: { merchant_id: number; remark?: string }) =>
     http.post('/api/admin/settlements', data).then(unwrap),
 
   markSettlementPaid: (id: number) =>
