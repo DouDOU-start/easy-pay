@@ -829,14 +829,6 @@ func (h *Handler) MerchantPeriodBalance(c *gin.Context) {
 		httputil.Fail500(c, "BALANCE_FAILED", "查询失败", err)
 		return
 	}
-	bal, err := h.balances.GetBalance(c.Request.Context(), merchantID)
-	if err != nil {
-		httputil.Fail500(c, "BALANCE_FAILED", "查询失败", err)
-		return
-	}
-	if pb.Amount > bal.Available {
-		pb.Amount = bal.Available
-	}
 	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": pb})
 }
 
@@ -941,15 +933,7 @@ func (h *Handler) CreateSettlement(c *gin.Context) {
 		httputil.Fail500(c, "BALANCE_FAILED", "查询余额失败", err)
 		return
 	}
-	bal, err := h.balances.GetBalance(c.Request.Context(), req.MerchantID)
-	if err != nil {
-		httputil.Fail500(c, "BALANCE_FAILED", "查询余额失败", err)
-		return
-	}
 	amount := pb.Amount
-	if amount > bal.Available {
-		amount = bal.Available
-	}
 	if amount <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "INSUFFICIENT", "msg": "该周期内无可结算余额"})
 		return
@@ -971,6 +955,7 @@ func (h *Handler) CreateSettlement(c *gin.Context) {
 		httputil.Fail500(c, "CREATE_FAILED", "创建结算单失败", err)
 		return
 	}
+	h.orders.MarkSettled(c.Request.Context(), req.MerchantID, s.ID, periodStart, periodEnd.AddDate(0, 0, 1))
 	h.log.Info("settlement created",
 		zap.String("settlement_no", s.SettlementNo),
 		zap.Int64("merchant_id", req.MerchantID),
@@ -1020,6 +1005,7 @@ func (h *Handler) CancelSettlement(c *gin.Context) {
 		httputil.Fail500(c, "UPDATE_FAILED", "更新失败", err)
 		return
 	}
+	h.orders.UnmarkSettled(c.Request.Context(), s.ID)
 	c.JSON(http.StatusOK, gin.H{"code": "OK"})
 }
 

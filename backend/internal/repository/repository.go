@@ -231,6 +231,8 @@ type OrderRepo interface {
 	MarkPaid(ctx context.Context, orderNo, channelOrderNo string, paidAt time.Time) error
 	List(ctx context.Context, filter OrderFilter) ([]*model.Order, int64, error)
 	CloseExpired(ctx context.Context, now time.Time, limit int) (int64, error)
+	MarkSettled(ctx context.Context, merchantID int64, settlementID int64, paidStart, paidEnd time.Time) (int64, error)
+	UnmarkSettled(ctx context.Context, settlementID int64) (int64, error)
 }
 
 type OrderFilter struct {
@@ -304,6 +306,22 @@ func (r *orderRepo) CloseExpired(ctx context.Context, now time.Time, limit int) 
 			"closed_at":  now,
 			"updated_at": now,
 		})
+	return res.RowsAffected, res.Error
+}
+
+func (r *orderRepo) MarkSettled(ctx context.Context, merchantID int64, settlementID int64, paidStart, paidEnd time.Time) (int64, error) {
+	paidStatuses := []model.OrderStatus{model.OrderPaid, model.OrderRefunded, model.OrderPartialRefunded}
+	res := r.db.WithContext(ctx).Model(&model.Order{}).
+		Where("merchant_id = ? AND status IN ? AND settlement_id IS NULL AND paid_at >= ? AND paid_at < ?",
+			merchantID, paidStatuses, paidStart, paidEnd).
+		Update("settlement_id", settlementID)
+	return res.RowsAffected, res.Error
+}
+
+func (r *orderRepo) UnmarkSettled(ctx context.Context, settlementID int64) (int64, error) {
+	res := r.db.WithContext(ctx).Model(&model.Order{}).
+		Where("settlement_id = ?", settlementID).
+		Update("settlement_id", nil)
 	return res.RowsAffected, res.Error
 }
 
@@ -599,45 +617,60 @@ type balanceRepo struct{ db *gorm.DB }
 func NewBalanceRepo(db *gorm.DB) BalanceRepo { return &balanceRepo{db: db} }
 
 func (r *balanceRepo) GetBalance(ctx context.Context, merchantID int64) (*MerchantBalance, error) {
-	var income int64
+	paidStatuses := []model.OrderStatus{model.OrderPaid, model.OrderRefunded, model.OrderPartialRefunded}
+	var totalIncome int64
 	if err := r.db.WithContext(ctx).Model(&model.Order{}).
-		Where("merchant_id = ? AND status IN ?", merchantID, []model.OrderStatus{model.OrderPaid, model.OrderRefunded, model.OrderPartialRefunded}).
-		Select("COALESCE(SUM(amount), 0)").Scan(&income).Error; err != nil {
+		Where("merchant_id = ? AND status IN ?", merchantID, paidStatuses).
+		Select("COALESCE(SUM(amount), 0)").Scan(&totalIncome).Error; err != nil {
 		return nil, err
 	}
-	var refund int64
+	var totalRefund int64
 	if err := r.db.WithContext(ctx).Model(&model.RefundOrder{}).
 		Where("merchant_id = ? AND status = ?", merchantID, model.RefundSuccess).
-		Select("COALESCE(SUM(amount), 0)").Scan(&refund).Error; err != nil {
+		Select("COALESCE(SUM(amount), 0)").Scan(&totalRefund).Error; err != nil {
 		return nil, err
 	}
-	var settled int64
-	if err := r.db.WithContext(ctx).Model(&model.Settlement{}).
-		Where("merchant_id = ? AND status IN ?", merchantID, []model.SettlementStatus{model.SettlementPaid, model.SettlementPending}).
-		Select("COALESCE(SUM(amount), 0)").Scan(&settled).Error; err != nil {
+	var unsettledIncome int64
+	if err := r.db.WithContext(ctx).Model(&model.Order{}).
+		Where("merchant_id = ? AND status IN ? AND settlement_id IS NULL", merchantID, paidStatuses).
+		Select("COALESCE(SUM(amount), 0)").Scan(&unsettledIncome).Error; err != nil {
 		return nil, err
 	}
+	var unsettledRefund int64
+	if err := r.db.WithContext(ctx).Model(&model.RefundOrder{}).
+		Where("merchant_id = ? AND status = ? AND order_no IN (?)", merchantID, model.RefundSuccess,
+			r.db.Model(&model.Order{}).Select("order_no").Where("merchant_id = ? AND settlement_id IS NULL", merchantID)).
+		Select("COALESCE(SUM(amount), 0)").Scan(&unsettledRefund).Error; err != nil {
+		return nil, err
+	}
+	available := unsettledIncome - unsettledRefund
+	if available < 0 {
+		available = 0
+	}
+	settled := totalIncome - totalRefund - available
 	return &MerchantBalance{
 		MerchantID:   merchantID,
-		TotalIncome:  income,
-		TotalRefund:  refund,
+		TotalIncome:  totalIncome,
+		TotalRefund:  totalRefund,
 		TotalSettled: settled,
-		Available:    income - refund - settled,
+		Available:    available,
 	}, nil
 }
 
 func (r *balanceRepo) GetPeriodBalance(ctx context.Context, merchantID int64, start, end time.Time) (*PeriodBalance, error) {
+	paidStatuses := []model.OrderStatus{model.OrderPaid, model.OrderRefunded, model.OrderPartialRefunded}
 	var income int64
 	if err := r.db.WithContext(ctx).Model(&model.Order{}).
-		Where("merchant_id = ? AND status IN ? AND paid_at >= ? AND paid_at < ?",
-			merchantID, []model.OrderStatus{model.OrderPaid, model.OrderRefunded, model.OrderPartialRefunded}, start, end).
+		Where("merchant_id = ? AND status IN ? AND settlement_id IS NULL AND paid_at >= ? AND paid_at < ?",
+			merchantID, paidStatuses, start, end).
 		Select("COALESCE(SUM(amount), 0)").Scan(&income).Error; err != nil {
 		return nil, err
 	}
 	var refund int64
 	if err := r.db.WithContext(ctx).Model(&model.RefundOrder{}).
-		Where("merchant_id = ? AND status = ? AND created_at >= ? AND created_at < ?",
-			merchantID, model.RefundSuccess, start, end).
+		Where("merchant_id = ? AND status = ? AND created_at >= ? AND created_at < ? AND order_no IN (?)",
+			merchantID, model.RefundSuccess, start, end,
+			r.db.Model(&model.Order{}).Select("order_no").Where("merchant_id = ? AND settlement_id IS NULL", merchantID)).
 		Select("COALESCE(SUM(amount), 0)").Scan(&refund).Error; err != nil {
 		return nil, err
 	}

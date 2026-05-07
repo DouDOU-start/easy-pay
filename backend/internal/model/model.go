@@ -110,6 +110,7 @@ type Order struct {
 	Extra           string      `gorm:"type:jsonb" json:"extra"`
 	CodeURL         string      `gorm:"column:code_url;size:512" json:"code_url"`
 	H5URL           string      `gorm:"column:h5_url;size:512" json:"h5_url"`
+	SettlementID    *int64      `gorm:"column:settlement_id" json:"settlement_id"`
 	ExpireAt        *time.Time  `json:"expire_at"`
 	PaidAt          *time.Time  `json:"paid_at"`
 	ClosedAt        *time.Time  `json:"closed_at"`
