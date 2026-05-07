@@ -157,7 +157,16 @@ func (h *PaymentHandler) Refund(c *gin.Context) {
 			zap.Int64("merchant_id", m.ID),
 			zap.String("merchant_order_no", req.MerchantOrderNo),
 			zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "REFUND_FAILED", "msg": "refund failed"})
+		code, status, msg := http.StatusInternalServerError, "REFUND_FAILED", "refund failed"
+		switch {
+		case errors.Is(err, payment.ErrOrderNotFound):
+			code, status, msg = http.StatusNotFound, "NOT_FOUND", "order not found"
+		case errors.Is(err, payment.ErrInvalidStatus):
+			code, status, msg = http.StatusBadRequest, "INVALID_STATUS", "order status does not support refund"
+		case errors.Is(err, payment.ErrRefundExceedAmount):
+			code, status, msg = http.StatusBadRequest, "EXCEED_AMOUNT", "refund amount exceeds refundable amount"
+		}
+		c.JSON(code, gin.H{"code": status, "msg": msg})
 		return
 	}
 	h.log.Info("refund submitted",

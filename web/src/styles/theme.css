@@ -377,6 +377,11 @@ body {
   flex: 0 0 auto;
 }
 
+.ep-content::after {
+  content: '';
+  flex: 0 0 48px;
+}
+
 .ep-content > .ant-table-wrapper {
   flex: 1 1 0;
   min-height: 0;

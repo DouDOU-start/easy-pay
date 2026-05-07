@@ -229,21 +229,46 @@ func (c *Channel) ParseNotify(ctx context.Context, r *http.Request) (*channel.No
 	return ev, nil
 }
 
+// refundNotify matches the decrypted refund callback payload from WeChat.
+// The field is "refund_status" in callbacks (vs "status" in the query API),
+// so we cannot reuse refunddomestic.Refund here.
+type refundNotify struct {
+	RefundId            *string              `json:"refund_id"`
+	OutRefundNo         *string              `json:"out_refund_no"`
+	TransactionId       *string              `json:"transaction_id"`
+	OutTradeNo          *string              `json:"out_trade_no"`
+	RefundStatus        *string              `json:"refund_status"`
+	SuccessTime         *string              `json:"success_time"`
+	UserReceivedAccount *string              `json:"user_received_account"`
+	Amount              *refundNotifyAmount  `json:"amount"`
+}
+
+type refundNotifyAmount struct {
+	Total       *int64 `json:"total"`
+	Refund      *int64 `json:"refund"`
+	PayerTotal  *int64 `json:"payer_total"`
+	PayerRefund *int64 `json:"payer_refund"`
+}
+
 func (c *Channel) ParseRefundNotify(ctx context.Context, r *http.Request) (*channel.RefundNotifyEvent, error) {
-	refund := new(refunddomestic.Refund)
-	if _, err := c.handler.ParseNotifyRequest(ctx, r, refund); err != nil {
+	var noti refundNotify
+	if _, err := c.handler.ParseNotifyRequest(ctx, r, &noti); err != nil {
 		return nil, fmt.Errorf("wechat parse refund notify: %w", err)
 	}
+	var status model.RefundStatus
+	if noti.RefundStatus != nil {
+		status = mapRefundStatus(*noti.RefundStatus)
+	} else {
+		status = model.RefundPending
+	}
 	ev := &channel.RefundNotifyEvent{
-		RefundNo:        strVal(refund.OutRefundNo),
-		ChannelRefundNo: strVal(refund.RefundId),
-		Status:          mapRefundStatus(string(*refund.Status)),
+		RefundNo:        strVal(noti.OutRefundNo),
+		OrderNo:         strVal(noti.OutTradeNo),
+		ChannelRefundNo: strVal(noti.RefundId),
+		Status:          status,
 	}
-	if refund.OutTradeNo != nil {
-		ev.OrderNo = *refund.OutTradeNo
-	}
-	if refund.Amount != nil && refund.Amount.Refund != nil {
-		ev.RefundAmount = *refund.Amount.Refund
+	if noti.Amount != nil && noti.Amount.Refund != nil {
+		ev.RefundAmount = *noti.Amount.Refund
 	}
 	return ev, nil
 }

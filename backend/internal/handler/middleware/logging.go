@@ -23,7 +23,8 @@ func RequestID() gin.HandlerFunc {
 	}
 }
 
-func AccessLog(log *zap.Logger) gin.HandlerFunc {
+func AccessLog(logger *zap.Logger) gin.HandlerFunc {
+	al := logger.WithOptions(zap.WithCaller(false), zap.AddStacktrace(zap.DPanicLevel))
 	return func(c *gin.Context) {
 		start := time.Now()
 		c.Next()
@@ -42,11 +43,11 @@ func AccessLog(log *zap.Logger) gin.HandlerFunc {
 		}
 
 		if status >= 500 {
-			log.Error("request", fields...)
+			al.Error("request", fields...)
 		} else if status >= 400 {
-			log.Warn("request", fields...)
+			al.Warn("request", fields...)
 		} else {
-			log.Info("request", fields...)
+			al.Info("request", fields...)
 		}
 	}
 }

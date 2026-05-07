@@ -736,7 +736,16 @@ func (h *Handler) RefundOrder(c *gin.Context) {
 		h.log.Error("admin refund failed",
 			zap.String("order_no", orderNo),
 			zap.Error(err))
-		httputil.Fail500(c, "REFUND_FAILED", "退款失败，请稍后重试", err)
+		code, status, msg := http.StatusInternalServerError, "REFUND_FAILED", "退款失败，请稍后重试"
+		switch {
+		case errors.Is(err, payment.ErrOrderNotFound):
+			code, msg = http.StatusNotFound, "订单不存在"
+		case errors.Is(err, payment.ErrInvalidStatus):
+			code, status, msg = http.StatusBadRequest, "INVALID_STATUS", "当前订单状态不支持退款"
+		case errors.Is(err, payment.ErrRefundExceedAmount):
+			code, status, msg = http.StatusBadRequest, "EXCEED_AMOUNT", "退款金额超过可退金额"
+		}
+		c.JSON(code, gin.H{"code": status, "msg": msg})
 		return
 	}
 	h.log.Info("admin refund submitted",
