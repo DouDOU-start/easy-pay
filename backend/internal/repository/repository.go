@@ -583,8 +583,15 @@ type MerchantBalance struct {
 	Available    int64 `json:"available"`
 }
 
+type PeriodBalance struct {
+	Income int64 `json:"income"`
+	Refund int64 `json:"refund"`
+	Amount int64 `json:"amount"`
+}
+
 type BalanceRepo interface {
 	GetBalance(ctx context.Context, merchantID int64) (*MerchantBalance, error)
+	GetPeriodBalance(ctx context.Context, merchantID int64, start, end time.Time) (*PeriodBalance, error)
 }
 
 type balanceRepo struct{ db *gorm.DB }
@@ -617,6 +624,28 @@ func (r *balanceRepo) GetBalance(ctx context.Context, merchantID int64) (*Mercha
 		TotalSettled: settled,
 		Available:    income - refund - settled,
 	}, nil
+}
+
+func (r *balanceRepo) GetPeriodBalance(ctx context.Context, merchantID int64, start, end time.Time) (*PeriodBalance, error) {
+	var income int64
+	if err := r.db.WithContext(ctx).Model(&model.Order{}).
+		Where("merchant_id = ? AND status IN ? AND paid_at >= ? AND paid_at < ?",
+			merchantID, []model.OrderStatus{model.OrderPaid, model.OrderRefunded, model.OrderPartialRefunded}, start, end).
+		Select("COALESCE(SUM(amount), 0)").Scan(&income).Error; err != nil {
+		return nil, err
+	}
+	var refund int64
+	if err := r.db.WithContext(ctx).Model(&model.RefundOrder{}).
+		Where("merchant_id = ? AND status = ? AND created_at >= ? AND created_at < ?",
+			merchantID, model.RefundSuccess, start, end).
+		Select("COALESCE(SUM(amount), 0)").Scan(&refund).Error; err != nil {
+		return nil, err
+	}
+	amount := income - refund
+	if amount < 0 {
+		amount = 0
+	}
+	return &PeriodBalance{Income: income, Refund: refund, Amount: amount}, nil
 }
 
 // ---------- Dashboard ----------

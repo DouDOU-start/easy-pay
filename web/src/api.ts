@@ -262,6 +262,9 @@ export const adminApi = {
   merchantBalance: (merchantId: number) =>
     http.get(`/api/admin/merchants/${merchantId}/balance`).then(unwrap<MerchantBalance>),
 
+  merchantPeriodBalance: (merchantId: number, start: string, end: string) =>
+    http.get(`/api/admin/merchants/${merchantId}/period-balance`, { params: { start, end } }).then(unwrap<{ income: number; refund: number; amount: number }>),
+
   listSettlements: (params: Record<string, any>) =>
     http.get('/api/admin/settlements', { params }).then(unwrap<PageResult<Settlement>>),
 

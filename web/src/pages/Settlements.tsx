@@ -19,6 +19,9 @@ export default function Settlements() {
   const [settleTarget, setSettleTarget] = useState<MerchantBalanceRow | null>(null)
   const [feeRate, setFeeRate] = useState(0)
   const [period, setPeriod] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null)
+  const [periodAmount, setPeriodAmount] = useState(0)
+  const [periodIncome, setPeriodIncome] = useState(0)
+  const [periodRefund, setPeriodRefund] = useState(0)
   const [remark, setRemark] = useState('')
   const [settling, setSettling] = useState(false)
 
@@ -43,15 +46,39 @@ export default function Settlements() {
     return { totalAvailable, withBalance, merchantCount: balances.length }
   }, [balances])
 
+  const fetchPeriodBalance = async (merchantId: number, start: dayjs.Dayjs, end: dayjs.Dayjs) => {
+    try {
+      const pb = await adminApi.merchantPeriodBalance(merchantId, start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD'))
+      setPeriodAmount(pb.amount)
+      setPeriodIncome(pb.income)
+      setPeriodRefund(pb.refund)
+    } catch {
+      setPeriodAmount(0)
+      setPeriodIncome(0)
+      setPeriodRefund(0)
+    }
+  }
+
   const openSettle = (row: MerchantBalanceRow) => {
     setSettleTarget(row)
     setFeeRate(0)
-    setPeriod([dayjs(row.period_start), dayjs()])
+    const p: [dayjs.Dayjs, dayjs.Dayjs] = [dayjs(row.period_start), dayjs()]
+    setPeriod(p)
     setRemark('')
+    fetchPeriodBalance(row.merchant_id, p[0], p[1])
   }
 
-  const fee = settleTarget ? Math.round(settleTarget.available * feeRate / 100) : 0
-  const netAmount = settleTarget ? settleTarget.available - fee : 0
+  const onPeriodChange = (v: [dayjs.Dayjs, dayjs.Dayjs] | null) => {
+    setPeriod(v)
+    if (v && settleTarget) {
+      fetchPeriodBalance(settleTarget.merchant_id, v[0], v[1])
+    } else {
+      setPeriodAmount(0)
+    }
+  }
+
+  const fee = Math.round(periodAmount * feeRate / 100)
+  const netAmount = periodAmount - fee
 
   const submitSettle = async () => {
     if (!settleTarget || !period) return
@@ -257,7 +284,7 @@ export default function Settlements() {
               <DatePicker.RangePicker
                 style={{ width: '100%' }}
                 value={period}
-                onChange={(v) => setPeriod(v as [dayjs.Dayjs, dayjs.Dayjs])}
+                onChange={(v) => onPeriodChange(v as [dayjs.Dayjs, dayjs.Dayjs])}
               />
             </div>
 
@@ -274,8 +301,16 @@ export default function Settlements() {
 
             <div style={{ padding: '12px 16px', background: 'var(--bg-base)', borderRadius: 6, marginBottom: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                <span>周期收入</span>
+                <span className="mono">¥{(periodIncome / 100).toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                <span>周期退款</span>
+                <span className="mono">- ¥{(periodRefund / 100).toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4, borderTop: '1px solid var(--border-hairline)', paddingTop: 4 }}>
                 <span>结算金额</span>
-                <span className="mono">¥{(settleTarget.available / 100).toFixed(2)}</span>
+                <span className="mono">¥{(periodAmount / 100).toFixed(2)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
                 <span>手续费（{feeRate}%）</span>

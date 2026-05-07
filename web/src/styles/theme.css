@@ -850,6 +850,10 @@ body {
   font-family: var(--font-body) !important;
 }
 
+.ant-input-number .ant-input-number-handler-wrap {
+  display: none !important;
+}
+
 .ant-input::placeholder,
 .ant-input-number-input::placeholder,
 .ant-select-selection-placeholder {

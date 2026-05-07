@@ -811,6 +811,23 @@ func (h *Handler) MerchantBalance(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": bal})
 }
 
+func (h *Handler) MerchantPeriodBalance(c *gin.Context) {
+	merchantID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	start, err1 := time.Parse("2006-01-02", c.Query("start"))
+	end, err2 := time.Parse("2006-01-02", c.Query("end"))
+	if err1 != nil || err2 != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "msg": "start/end required (YYYY-MM-DD)"})
+		return
+	}
+	end = end.AddDate(0, 0, 1)
+	pb, err := h.balances.GetPeriodBalance(c.Request.Context(), merchantID, start, end)
+	if err != nil {
+		httputil.Fail500(c, "BALANCE_FAILED", "查询失败", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": pb})
+}
+
 func (h *Handler) ListSettlements(c *gin.Context) {
 	page, size := httputil.ParsePage(c)
 	filter := repository.SettlementFilter{
@@ -894,18 +911,6 @@ func (h *Handler) CreateSettlement(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "msg": "商户不存在"})
 		return
 	}
-	bal, err := h.balances.GetBalance(c.Request.Context(), req.MerchantID)
-	if err != nil {
-		httputil.Fail500(c, "BALANCE_FAILED", "查询余额失败", err)
-		return
-	}
-	if bal.Available <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "INSUFFICIENT", "msg": "无可结算余额"})
-		return
-	}
-	amount := bal.Available
-	fee := int64(float64(amount) * req.FeeRate)
-	netAmount := amount - fee
 	now := time.Now()
 	periodStart := now
 	periodEnd := now
@@ -919,6 +924,18 @@ func (h *Handler) CreateSettlement(c *gin.Context) {
 			periodEnd = t
 		}
 	}
+	pb, err := h.balances.GetPeriodBalance(c.Request.Context(), req.MerchantID, periodStart, periodEnd.AddDate(0, 0, 1))
+	if err != nil {
+		httputil.Fail500(c, "BALANCE_FAILED", "查询余额失败", err)
+		return
+	}
+	if pb.Amount <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "INSUFFICIENT", "msg": "该周期内无可结算余额"})
+		return
+	}
+	amount := pb.Amount
+	fee := int64(float64(amount) * req.FeeRate)
+	netAmount := amount - fee
 	s := &model.Settlement{
 		SettlementNo: idgen.OrderNo("ST"),
 		MerchantID:   req.MerchantID,

@@ -151,13 +151,13 @@ export default function MerchantOrders() {
             title: '渠道',
             dataIndex: 'channel',
             width: 100,
-            render: (v: string) => <span className="mono" style={{ textTransform: 'uppercase', fontSize: 11 }}>{v}</span>,
+            render: (v: string) => <span style={{ fontSize: 12 }}>{{ wechat: '微信', alipay: '支付宝' }[v] || v}</span>,
           },
           {
             title: '类型',
             dataIndex: 'trade_type',
             width: 100,
-            render: (v: string) => <span className="mono" style={{ textTransform: 'uppercase', fontSize: 11, color: 'var(--text-secondary)' }}>{v}</span>,
+            render: (v: string) => <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{{ native: '扫码', h5: 'H5' }[v] || v}</span>,
           },
           {
             title: '金额',
