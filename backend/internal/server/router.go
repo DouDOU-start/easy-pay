@@ -42,6 +42,7 @@ func NewRouter(d Deps) *gin.Engine {
 
 	// ---------- provider callbacks ----------
 	r.POST("/callback/:channel/:merchant_id", d.Callback.Receive)
+	r.POST("/callback/refund/:channel/:merchant_id", d.Callback.ReceiveRefund)
 
 	// ---------- all API under /api ----------
 

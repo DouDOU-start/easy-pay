@@ -126,6 +126,13 @@ type refundReq struct {
 	Reason           string `json:"reason"`
 }
 
+func defaultReason(r string) string {
+	if r == "" {
+		return "商家退款"
+	}
+	return r
+}
+
 func (h *PaymentHandler) Refund(c *gin.Context) {
 	var req refundReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -143,14 +150,14 @@ func (h *PaymentHandler) Refund(c *gin.Context) {
 		MerchantOrderNo:  req.MerchantOrderNo,
 		MerchantRefundNo: req.MerchantRefundNo,
 		Amount:           req.Amount,
-		Reason:           req.Reason,
+		Reason:           defaultReason(req.Reason),
 	})
 	if err != nil {
 		h.log.Error("refund failed",
 			zap.Int64("merchant_id", m.ID),
 			zap.String("merchant_order_no", req.MerchantOrderNo),
 			zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "REFUND_FAILED", "msg": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "REFUND_FAILED", "msg": "refund failed"})
 		return
 	}
 	h.log.Info("refund submitted",

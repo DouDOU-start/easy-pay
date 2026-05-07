@@ -85,6 +85,10 @@ func (c *Channel) Close(ctx context.Context, req channel.CloseRequest) error {
 	return nil
 }
 
+func (c *Channel) ParseRefundNotify(_ context.Context, _ *http.Request) (*channel.RefundNotifyEvent, error) {
+	return nil, channel.ErrUnsupported
+}
+
 func (c *Channel) Refund(ctx context.Context, req channel.RefundRequest) (*channel.RefundResult, error) {
 	_ = ctx
 	return &channel.RefundResult{

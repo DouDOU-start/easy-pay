@@ -28,8 +28,11 @@ type PaymentChannel interface {
 	// Refund requests a refund against a paid transaction.
 	Refund(ctx context.Context, req RefundRequest) (*RefundResult, error)
 
-	// ParseNotify verifies the callback signature and returns a normalised event.
+	// ParseNotify verifies the callback signature and returns a normalised payment event.
 	ParseNotify(ctx context.Context, r *http.Request) (*NotifyEvent, error)
+
+	// ParseRefundNotify verifies the callback signature and returns a normalised refund event.
+	ParseRefundNotify(ctx context.Context, r *http.Request) (*RefundNotifyEvent, error)
 
 	// NotifyAck returns the provider-expected body for a successful callback ack.
 	NotifyAck() (contentType string, body []byte)
@@ -99,6 +102,14 @@ type NotifyEvent struct {
 	Amount         int64
 	PaidAt         string
 	Raw            map[string]any
+}
+
+type RefundNotifyEvent struct {
+	RefundNo        string
+	OrderNo         string
+	ChannelRefundNo string
+	RefundAmount    int64
+	Status          model.RefundStatus
 }
 
 var (

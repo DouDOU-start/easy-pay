@@ -657,6 +657,13 @@ type adminRefundReq struct {
 	Reason string `json:"reason"`
 }
 
+func defaultReason(r string) string {
+	if r == "" {
+		return "商家退款"
+	}
+	return r
+}
+
 func (h *Handler) RefundOrder(c *gin.Context) {
 	orderNo := c.Param("order_no")
 	o, err := h.orders.GetByOrderNo(c.Request.Context(), orderNo)
@@ -678,13 +685,13 @@ func (h *Handler) RefundOrder(c *gin.Context) {
 		MerchantOrderNo:  o.MerchantOrderNo,
 		MerchantRefundNo: idgen.OrderNo("ARF"),
 		Amount:           req.Amount,
-		Reason:           req.Reason,
+		Reason:           defaultReason(req.Reason),
 	})
 	if err != nil {
 		h.log.Error("admin refund failed",
 			zap.String("order_no", orderNo),
 			zap.Error(err))
-		httputil.Fail500(c, "REFUND_FAILED", "退款失败: "+err.Error(), err)
+		httputil.Fail500(c, "REFUND_FAILED", "退款失败，请稍后重试", err)
 		return
 	}
 	h.log.Info("admin refund submitted",

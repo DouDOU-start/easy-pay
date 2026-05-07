@@ -263,12 +263,14 @@ func (s *Service) Refund(ctx context.Context, in RefundInput) (*model.RefundOrde
 		zap.String("channel", string(o.Channel)),
 		zap.Int64("amount", in.Amount),
 		zap.Int64("already_refunded", refunded))
+	refundNotifyURL := fmt.Sprintf("%s/callback/refund/%s/%d", s.platformBaseGetter(ctx), o.Channel, in.MerchantID)
 	res, err := ch.Refund(ctx, channel.RefundRequest{
 		OrderNo:      o.OrderNo,
 		RefundNo:     ro.RefundNo,
 		OriginAmount: o.Amount,
 		RefundAmount: in.Amount,
 		Reason:       in.Reason,
+		NotifyURL:    refundNotifyURL,
 	})
 	if err != nil {
 		s.log.Error("channel refund failed",
@@ -349,6 +351,47 @@ func (s *Service) HandlePaymentNotify(ctx context.Context, ev *channel.NotifyEve
 		"paid_at":           paidAt.Format(time.RFC3339),
 	}
 	return s.notifier.Enqueue(ctx, o.MerchantID, o.OrderNo, string(channel.EventPaymentSuccess), payload)
+}
+
+func (s *Service) HandleRefundNotify(ctx context.Context, ev *channel.RefundNotifyEvent) error {
+	ro, err := s.refunds.GetByRefundNo(ctx, ev.RefundNo)
+	if err != nil {
+		return fmt.Errorf("refund not found: %s: %w", ev.RefundNo, err)
+	}
+	if ro.Status == ev.Status {
+		return nil
+	}
+
+	ro.Status = ev.Status
+	ro.ChannelRefundNo = ev.ChannelRefundNo
+	if err := s.refunds.Update(ctx, ro); err != nil {
+		return err
+	}
+	s.log.Info("refund notify processed",
+		zap.String("refund_no", ro.RefundNo),
+		zap.String("order_no", ro.OrderNo),
+		zap.String("status", string(ro.Status)))
+
+	if ro.Status == model.RefundSuccess {
+		o, err := s.orders.GetByOrderNo(ctx, ro.OrderNo)
+		if err != nil {
+			return err
+		}
+		refunded, err := s.refunds.SumRefundedAmount(ctx, o.OrderNo)
+		if err != nil {
+			return err
+		}
+		if refunded >= o.Amount {
+			o.Status = model.OrderRefunded
+		} else {
+			o.Status = model.OrderPartialRefunded
+		}
+		_ = s.orders.Update(ctx, o)
+		s.log.Info("order status updated after refund notify",
+			zap.String("order_no", o.OrderNo),
+			zap.String("status", string(o.Status)))
+	}
+	return nil
 }
 
 func (s *Service) StartExpireScheduler() {

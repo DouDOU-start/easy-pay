@@ -69,3 +69,48 @@ func (h *Handler) Receive(c *gin.Context) {
 	ct, body := impl.NotifyAck()
 	c.Data(http.StatusOK, ct, body)
 }
+
+func (h *Handler) ReceiveRefund(c *gin.Context) {
+	chName := model.Channel(c.Param("channel"))
+	merchantID, err := strconv.ParseInt(c.Param("merchant_id"), 10, 64)
+	if err != nil {
+		c.String(http.StatusBadRequest, "bad merchant id")
+		return
+	}
+
+	impl, err := h.registry.Resolve(c.Request.Context(), merchantID, chName)
+	if err != nil {
+		h.log.Warn("refund callback resolve failed",
+			zap.String("channel", string(chName)),
+			zap.Int64("merchant_id", merchantID),
+			zap.Error(err))
+		c.String(http.StatusNotFound, "unknown channel")
+		return
+	}
+	ev, err := impl.ParseRefundNotify(c.Request.Context(), c.Request)
+	if err != nil {
+		h.log.Warn("refund callback parse failed",
+			zap.String("channel", string(chName)),
+			zap.Int64("merchant_id", merchantID),
+			zap.Error(err))
+		c.String(http.StatusBadRequest, "bad notify")
+		return
+	}
+	h.log.Info("refund callback received",
+		zap.String("channel", string(chName)),
+		zap.Int64("merchant_id", merchantID),
+		zap.String("refund_no", ev.RefundNo),
+		zap.String("order_no", ev.OrderNo),
+		zap.String("status", string(ev.Status)))
+	if err := h.svc.HandleRefundNotify(c.Request.Context(), ev); err != nil {
+		h.log.Error("refund callback handle failed",
+			zap.String("channel", string(chName)),
+			zap.Int64("merchant_id", merchantID),
+			zap.String("refund_no", ev.RefundNo),
+			zap.Error(err))
+		c.String(http.StatusInternalServerError, "internal error")
+		return
+	}
+	ct, body := impl.NotifyAck()
+	c.Data(http.StatusOK, ct, body)
+}

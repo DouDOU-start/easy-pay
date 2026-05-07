@@ -705,6 +705,7 @@ body {
   text-transform: none !important;
   font-weight: 500 !important;
   padding: 11px 20px !important;
+  text-align: center !important;
 }
 
 .ep-content .ant-table-thead > tr > th::before {
@@ -718,6 +719,7 @@ body {
   font-size: 13px !important;
   padding: 7px 20px !important;
   transition: background 0.15s ease;
+  text-align: center !important;
 }
 
 .ep-content .ant-table-tbody > tr:last-child > td {

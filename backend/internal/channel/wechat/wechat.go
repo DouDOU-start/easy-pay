@@ -229,6 +229,25 @@ func (c *Channel) ParseNotify(ctx context.Context, r *http.Request) (*channel.No
 	return ev, nil
 }
 
+func (c *Channel) ParseRefundNotify(ctx context.Context, r *http.Request) (*channel.RefundNotifyEvent, error) {
+	refund := new(refunddomestic.Refund)
+	if _, err := c.handler.ParseNotifyRequest(ctx, r, refund); err != nil {
+		return nil, fmt.Errorf("wechat parse refund notify: %w", err)
+	}
+	ev := &channel.RefundNotifyEvent{
+		RefundNo:        strVal(refund.OutRefundNo),
+		ChannelRefundNo: strVal(refund.RefundId),
+		Status:          mapRefundStatus(string(*refund.Status)),
+	}
+	if refund.OutTradeNo != nil {
+		ev.OrderNo = *refund.OutTradeNo
+	}
+	if refund.Amount != nil && refund.Amount.Refund != nil {
+		ev.RefundAmount = *refund.Amount.Refund
+	}
+	return ev, nil
+}
+
 func (c *Channel) NotifyAck() (string, []byte) {
 	return "application/json", []byte(`{"code":"SUCCESS","message":"OK"}`)
 }
