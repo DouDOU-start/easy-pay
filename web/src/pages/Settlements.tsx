@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Table, Tag, Select, Button, Modal, Input, message, Tooltip, Tabs } from 'antd'
+import { Table, Tag, Select, Button, Modal, Input, InputNumber, DatePicker, message, Tooltip, Tabs } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
+import dayjs from 'dayjs'
 import { adminApi } from '../api'
 import type { MerchantBalanceRow } from '../api'
 
@@ -16,6 +17,8 @@ export default function Settlements() {
   const [size] = useState(20)
   const [filter, setFilter] = useState<{ status?: string }>({})
   const [settleTarget, setSettleTarget] = useState<MerchantBalanceRow | null>(null)
+  const [feeRate, setFeeRate] = useState(0)
+  const [period, setPeriod] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null)
   const [remark, setRemark] = useState('')
   const [settling, setSettling] = useState(false)
 
@@ -40,14 +43,29 @@ export default function Settlements() {
     return { totalAvailable, withBalance, merchantCount: balances.length }
   }, [balances])
 
+  const openSettle = (row: MerchantBalanceRow) => {
+    setSettleTarget(row)
+    setFeeRate(0)
+    setPeriod([dayjs(row.period_start), dayjs()])
+    setRemark('')
+  }
+
+  const fee = settleTarget ? Math.round(settleTarget.available * feeRate / 100) : 0
+  const netAmount = settleTarget ? settleTarget.available - fee : 0
+
   const submitSettle = async () => {
-    if (!settleTarget) return
+    if (!settleTarget || !period) return
     setSettling(true)
     try {
-      await adminApi.createSettlement({ merchant_id: settleTarget.merchant_id, remark })
+      await adminApi.createSettlement({
+        merchant_id: settleTarget.merchant_id,
+        fee_rate: feeRate / 100,
+        period_start: period[0].format('YYYY-MM-DD'),
+        period_end: period[1].format('YYYY-MM-DD'),
+        remark,
+      })
       message.success('结算单已创建')
       setSettleTarget(null)
-      setRemark('')
       loadBalances()
     } catch (e: any) {
       message.error(e.response?.data?.msg || '创建失败')
@@ -140,7 +158,7 @@ export default function Settlements() {
                       {
                         title: '操作', width: 100, fixed: 'right' as const,
                         render: (_: any, row: MerchantBalanceRow) => row.available > 0
-                          ? <Button type="link" size="small" onClick={() => { setSettleTarget(row); setRemark('') }}>结算</Button>
+                          ? <Button type="link" size="small" onClick={() => openSettle(row)}>结算</Button>
                           : <span style={{ color: 'var(--text-faint)', fontSize: 12 }}>无余额</span>,
                       },
                     ]}
@@ -220,23 +238,59 @@ export default function Settlements() {
         okText="确认结算"
         cancelText="取消"
         centered
+        width={480}
       >
         {settleTarget && (
-          <div style={{ marginBottom: 16 }}>
+          <div>
             <div style={{ padding: '16px', background: 'var(--bg-elevated)', borderRadius: 8, marginBottom: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>{settleTarget.name} · {settleTarget.mch_no}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>{settleTarget.name} · {settleTarget.mch_no}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
                 <div>总收入：<span className="mono">¥{(settleTarget.total_income / 100).toFixed(2)}</span></div>
                 <div>已退款：<span className="mono">¥{(settleTarget.total_refund / 100).toFixed(2)}</span></div>
                 <div>已结算：<span className="mono">¥{(settleTarget.total_settled / 100).toFixed(2)}</span></div>
-                <div>结算周期：<span className="mono">{settleTarget.period_start} ~ 今天</span></div>
-              </div>
-              <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--bg-base)', borderRadius: 6, color: 'var(--accent-emerald)', fontWeight: 600, fontSize: 14, textAlign: 'center' }}>
-                本次结算：<span className="mono">¥{(settleTarget.available / 100).toFixed(2)}</span>
+                <div>可结算：<span className="mono" style={{ color: 'var(--accent-emerald)' }}>¥{(settleTarget.available / 100).toFixed(2)}</span></div>
               </div>
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 8 }}>备注（可选）</div>
-            <Input.TextArea rows={2} value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="可选" />
+
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 6 }}>结算周期</div>
+              <DatePicker.RangePicker
+                style={{ width: '100%' }}
+                value={period}
+                onChange={(v) => setPeriod(v as [dayjs.Dayjs, dayjs.Dayjs])}
+              />
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 6 }}>手续费率（%）</div>
+              <InputNumber
+                min={0} max={100} step={0.1}
+                style={{ width: '100%' }}
+                value={feeRate}
+                onChange={(v) => setFeeRate(v ?? 0)}
+                addonAfter="%"
+              />
+            </div>
+
+            <div style={{ padding: '12px 16px', background: 'var(--bg-base)', borderRadius: 6, marginBottom: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                <span>结算金额</span>
+                <span className="mono">¥{(settleTarget.available / 100).toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                <span>手续费（{feeRate}%）</span>
+                <span className="mono">- ¥{(fee / 100).toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 600, color: 'var(--accent-emerald)', borderTop: '1px solid var(--border-hairline)', paddingTop: 8, marginTop: 4 }}>
+                <span>实付金额</span>
+                <span className="mono">¥{(netAmount / 100).toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 6 }}>备注（可选）</div>
+              <Input.TextArea rows={2} value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="可选" />
+            </div>
           </div>
         )}
       </Modal>

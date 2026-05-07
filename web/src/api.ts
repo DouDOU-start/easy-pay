@@ -268,7 +268,7 @@ export const adminApi = {
   listMerchantBalances: () =>
     http.get('/api/admin/settlements/balances').then(unwrap<MerchantBalanceRow[]>),
 
-  createSettlement: (data: { merchant_id: number; remark?: string }) =>
+  createSettlement: (data: { merchant_id: number; fee_rate: number; period_start: string; period_end: string; remark?: string }) =>
     http.post('/api/admin/settlements', data).then(unwrap),
 
   markSettlementPaid: (id: number) =>

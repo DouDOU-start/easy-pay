@@ -877,8 +877,11 @@ func (h *Handler) ListMerchantBalances(c *gin.Context) {
 }
 
 type createSettlementReq struct {
-	MerchantID int64  `json:"merchant_id" binding:"required"`
-	Remark     string `json:"remark"`
+	MerchantID  int64   `json:"merchant_id" binding:"required"`
+	FeeRate     float64 `json:"fee_rate"`
+	PeriodStart string  `json:"period_start"`
+	PeriodEnd   string  `json:"period_end"`
+	Remark      string  `json:"remark"`
 }
 
 func (h *Handler) CreateSettlement(c *gin.Context) {
@@ -887,8 +890,7 @@ func (h *Handler) CreateSettlement(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "msg": err.Error()})
 		return
 	}
-	m, err := h.merchants.GetByID(c.Request.Context(), req.MerchantID)
-	if err != nil {
+	if _, err := h.merchants.GetByID(c.Request.Context(), req.MerchantID); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "msg": "商户不存在"})
 		return
 	}
@@ -901,19 +903,21 @@ func (h *Handler) CreateSettlement(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "INSUFFICIENT", "msg": "无可结算余额"})
 		return
 	}
-	feeRate := 0.0
-	if v, err := h.settings.Get(c.Request.Context(), "fee_rate"); err == nil && v != "" {
-		if r, err := strconv.ParseFloat(v, 64); err == nil {
-			feeRate = r
-		}
-	}
 	amount := bal.Available
-	fee := int64(float64(amount) * feeRate)
+	fee := int64(float64(amount) * req.FeeRate)
 	netAmount := amount - fee
 	now := time.Now()
-	periodStart := m.CreatedAt
-	if last, err := h.settlements.LastPaidEndTime(c.Request.Context(), req.MerchantID); err == nil && last != nil {
-		periodStart = *last
+	periodStart := now
+	periodEnd := now
+	if req.PeriodStart != "" {
+		if t, err := time.Parse("2006-01-02", req.PeriodStart); err == nil {
+			periodStart = t
+		}
+	}
+	if req.PeriodEnd != "" {
+		if t, err := time.Parse("2006-01-02", req.PeriodEnd); err == nil {
+			periodEnd = t
+		}
 	}
 	s := &model.Settlement{
 		SettlementNo: idgen.OrderNo("ST"),
@@ -922,7 +926,7 @@ func (h *Handler) CreateSettlement(c *gin.Context) {
 		Fee:          fee,
 		NetAmount:    netAmount,
 		PeriodStart:  periodStart,
-		PeriodEnd:    now,
+		PeriodEnd:    periodEnd,
 		Status:       model.SettlementPending,
 		Remark:       req.Remark,
 	}
