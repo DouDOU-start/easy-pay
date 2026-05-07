@@ -163,24 +163,26 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: 'var(--text-primary)' }}>最近订单</div>
-      <Table
-        rowKey="id"
-        dataSource={data?.recent_orders ?? []}
-        pagination={false}
-        size="small"
-        scroll={{ x: 'max-content' }}
-        columns={[
-          { title: '平台单号', dataIndex: 'order_no', width: 220, render: (v: string) => <span className="tracked-id">{v}</span> },
-          { title: '渠道', dataIndex: 'channel', width: 90, render: (v: string) => <span className="mono" style={{ textTransform: 'uppercase', fontSize: 11 }}>{v}</span> },
-          { title: '金额', dataIndex: 'amount', width: 110, render: (v: number) => <span className="money">¥{(v / 100).toFixed(2)}</span> },
-          { title: '状态', dataIndex: 'status', width: 100, render: (s: string) => <Tag color={statusColor[s] || 'default'}>{statusLabel[s] || s}</Tag> },
-          {
-            title: '时间', dataIndex: 'created_at', width: 160,
-            render: (v: string) => <span className="mono" style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{v?.slice(0, 19).replace('T', ' ')}</span>,
-          },
-        ]}
-      />
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: 'var(--text-primary)' }}>最近订单</div>
+        <Table
+          rowKey="id"
+          dataSource={data?.recent_orders ?? []}
+          pagination={false}
+          size="small"
+          scroll={{ x: 'max-content' }}
+          columns={[
+            { title: '平台单号', dataIndex: 'order_no', width: 220, render: (v: string) => <span className="tracked-id">{v}</span> },
+            { title: '渠道', dataIndex: 'channel', width: 90, render: (v: string) => <span className="mono" style={{ textTransform: 'uppercase', fontSize: 11 }}>{v}</span> },
+            { title: '金额', dataIndex: 'amount', width: 110, render: (v: number) => <span className="money">¥{(v / 100).toFixed(2)}</span> },
+            { title: '状态', dataIndex: 'status', width: 100, render: (s: string) => <Tag color={statusColor[s] || 'default'}>{statusLabel[s] || s}</Tag> },
+            {
+              title: '时间', dataIndex: 'created_at', width: 160,
+              render: (v: string) => <span className="mono" style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{v?.slice(0, 19).replace('T', ' ')}</span>,
+            },
+          ]}
+        />
+      </div>
     </>
   )
 }
