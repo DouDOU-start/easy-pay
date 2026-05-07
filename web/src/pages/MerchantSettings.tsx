@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Button, Form, Input, Modal, message, Tag, Typography } from 'antd'
+import { Button, Form, Input, Modal, message, Tag } from 'antd'
 import { CopyOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
 import { merchantApi } from '../api'
-
-const { Text } = Typography
 
 interface MerchantProfile {
   id: number
@@ -153,23 +151,30 @@ export default function MerchantSettings() {
         open={secretOpen}
         onCancel={() => setSecretOpen(false)}
         centered
+        width={520}
         footer={[
           <Button key="reset" danger onClick={doResetSecret}>重置密钥</Button>,
           <Button key="close" type="primary" onClick={() => setSecretOpen(false)}>关闭</Button>,
         ]}
       >
         {secret && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div>
-              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 6 }}>App ID</div>
-              <Text code copyable style={{ fontSize: 13, wordBreak: 'break-all' }}>{secret.app_id}</Text>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ padding: '14px 16px', background: 'var(--bg-deep)', borderRadius: 6 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 8, letterSpacing: '0.05em' }}>APP ID</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="mono" style={{ fontSize: 14, color: 'var(--text-primary)', flex: 1 }}>{secret.app_id}</span>
+                <Button size="small" type="text" icon={<CopyOutlined />} onClick={() => copyText(secret.app_id)} />
+              </div>
             </div>
-            <div>
-              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 6 }}>App Secret</div>
-              <Text code copyable style={{ fontSize: 13, wordBreak: 'break-all' }}>{secret.app_secret}</Text>
+            <div style={{ padding: '14px 16px', background: 'var(--bg-deep)', borderRadius: 6 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 8, letterSpacing: '0.05em' }}>APP SECRET</div>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                <span className="mono" style={{ fontSize: 13, color: 'var(--accent-gold)', flex: 1, wordBreak: 'break-all', lineHeight: 1.6 }}>{secret.app_secret}</span>
+                <Button size="small" type="text" icon={<CopyOutlined />} onClick={() => copyText(secret.app_secret)} style={{ flexShrink: 0 }} />
+              </div>
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text-faint)', padding: '8px 12px', background: 'var(--bg-deep)', borderRadius: 4 }}>
-              请妥善保管密钥，勿泄露给第三方。重置后旧密钥立即失效。
+            <div style={{ fontSize: 11, color: 'var(--text-faint)', padding: '10px 14px', background: 'var(--bg-elevated)', borderRadius: 4, lineHeight: 1.6 }}>
+              请妥善保管密钥，勿泄露给第三方。重置后旧密钥立即失效，所有使用旧密钥的 API 调用将鉴权失败。
             </div>
           </div>
         )}
