@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/easypay/easy-pay/backend/internal/handler/auth"
@@ -145,6 +146,28 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": "OK"})
+}
+
+func (h *Handler) ResetSecret(c *gin.Context) {
+	id, err := auth.CurrentUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"code": "AUTH_FAILED"})
+		return
+	}
+	m, err := h.merchants.GetByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"code": "AUTH_FAILED"})
+		return
+	}
+	m.AppSecret = uuid.NewString() + uuid.NewString()
+	if err := h.merchants.Update(c.Request.Context(), m); err != nil {
+		httputil.Fail500(c, "RESET_FAILED", "重置失败", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": gin.H{
+		"app_id":     m.AppID,
+		"app_secret": m.AppSecret,
+	}})
 }
 
 // ---------- bills ----------

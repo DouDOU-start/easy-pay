@@ -74,6 +74,7 @@ func NewRouter(d Deps) *gin.Engine {
 		authed.GET("/merchant/me", d.Merchant.Me)
 		authed.PUT("/merchant/me", d.Merchant.UpdateProfile)
 		authed.PUT("/merchant/me/password", d.Merchant.ChangePassword)
+		authed.POST("/merchant/me/reset-secret", d.Merchant.ResetSecret)
 		authed.GET("/merchant/orders", d.Merchant.Orders)
 		authed.GET("/merchant/orders/:order_no", d.Merchant.OrderDetail)
 		authed.GET("/merchant/notify_logs", d.Merchant.NotifyLogs)

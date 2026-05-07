@@ -303,6 +303,9 @@ export const merchantApi = {
   changePassword: (data: { old_password: string; new_password: string }) =>
     http.put('/api/merchant/me/password', data),
 
+  resetSecret: () =>
+    http.post('/api/merchant/me/reset-secret').then(unwrap<{ app_id: string; app_secret: string }>),
+
   listOrders: (params: Record<string, any>) =>
     http.get('/api/merchant/orders', { params }).then(unwrap<PageResult<Order>>),
 
