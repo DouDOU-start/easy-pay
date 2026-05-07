@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Table, Tag } from 'antd'
+import { Table, Tag, Select, Button } from 'antd'
+import { ReloadOutlined } from '@ant-design/icons'
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip as RTooltip, ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts'
 import { adminApi } from '../api'
-import type { AdminDashboard as DashData } from '../api'
+import type { AdminDashboard as DashData, Merchant } from '../api'
 
 const statusColor: Record<string, string> = {
   pending: 'orange', paid: 'green', closed: 'default',
@@ -28,7 +29,16 @@ const chartTooltipStyle = {
 
 export default function AdminDashboard() {
   const [data, setData] = useState<DashData | null>(null)
-  useEffect(() => { adminApi.dashboard().then(setData).catch(() => {}) }, [])
+  const [merchants, setMerchants] = useState<Merchant[]>([])
+  const [merchantId, setMerchantId] = useState<number | undefined>()
+
+  const load = () => {
+    adminApi.dashboard(merchantId ? { merchant_id: merchantId } : undefined).then(setData).catch(() => {})
+  }
+  useEffect(() => {
+    adminApi.listMerchants({ page: 1, size: 500 }).then((r) => setMerchants(r.list)).catch(() => {})
+  }, [])
+  useEffect(() => { load() }, [merchantId])
 
   const t = data?.today
   const o = data?.overall
@@ -52,6 +62,23 @@ export default function AdminDashboard() {
 
   return (
     <>
+      <div className="ep-filter-bar">
+        <span className="ep-filter-label">筛选</span>
+        <Select
+          placeholder="全部商户"
+          allowClear
+          showSearch
+          optionFilterProp="label"
+          style={{ width: 220 }}
+          value={merchantId}
+          onChange={(v) => setMerchantId(v)}
+          options={merchants.map((m) => ({ value: m.id, label: `${m.name} · ${m.mch_no}` }))}
+        />
+        <div className="ep-filter-actions">
+          <Button icon={<ReloadOutlined />} onClick={load}>刷新</Button>
+        </div>
+      </div>
+
       <div className="ep-stat-strip">
         <div className="ep-stat">
           <div className="label">今日订单</div>

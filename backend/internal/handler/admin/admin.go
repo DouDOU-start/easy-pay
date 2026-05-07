@@ -79,15 +79,19 @@ func New(
 
 func (h *Handler) Dashboard(c *gin.Context) {
 	ctx := c.Request.Context()
-	todayCount, _ := h.dashboard.TodayOrderCount(ctx, 0)
-	todayPaid, _ := h.dashboard.TodayPaidAmount(ctx, 0)
-	todayRefund, _ := h.dashboard.TodayRefundAmount(ctx, 0)
+	var mid int64
+	if v := c.Query("merchant_id"); v != "" {
+		mid, _ = strconv.ParseInt(v, 10, 64)
+	}
+	todayCount, _ := h.dashboard.TodayOrderCount(ctx, mid)
+	todayPaid, _ := h.dashboard.TodayPaidAmount(ctx, mid)
+	todayRefund, _ := h.dashboard.TodayRefundAmount(ctx, mid)
 	totalMerchants, _ := h.dashboard.TotalMerchantCount(ctx)
-	totalOrders, _ := h.dashboard.TotalOrderCount(ctx, 0)
-	totalRevenue, _ := h.dashboard.TotalRevenue(ctx, 0)
+	totalOrders, _ := h.dashboard.TotalOrderCount(ctx, mid)
+	totalRevenue, _ := h.dashboard.TotalRevenue(ctx, mid)
 	pendingSettlement, _ := h.dashboard.PendingSettlementAmount(ctx)
-	trend, _ := h.dashboard.Last7DaysPayments(ctx, 0)
-	recentOrders, _ := h.dashboard.RecentOrders(ctx, 0, 10)
+	trend, _ := h.dashboard.Last7DaysPayments(ctx, mid)
+	recentOrders, _ := h.dashboard.RecentOrders(ctx, mid, 10)
 	if trend == nil {
 		trend = []repository.DailyPayment{}
 	}

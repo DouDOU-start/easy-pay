@@ -199,8 +199,8 @@ export const authApi = {
 // --------------- admin ---------------
 
 export const adminApi = {
-  dashboard: () =>
-    http.get('/api/admin/dashboard').then(unwrap<AdminDashboard>),
+  dashboard: (params?: { merchant_id?: number }) =>
+    http.get('/api/admin/dashboard', { params }).then(unwrap<AdminDashboard>),
 
   // merchants
   listMerchants: (params: Record<string, any>) =>

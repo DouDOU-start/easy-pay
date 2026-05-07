@@ -702,7 +702,7 @@ func (r *dashboardRepo) TodayRefundAmount(ctx context.Context, merchantID int64)
 }
 func (r *dashboardRepo) TotalMerchantCount(ctx context.Context) (int64, error) {
 	var n int64
-	return n, r.db.WithContext(ctx).Model(&model.Merchant{}).Where("status = 1 AND role != 'admin'").Count(&n).Error
+	return n, r.db.WithContext(ctx).Model(&model.Merchant{}).Where("status = 1").Count(&n).Error
 }
 func (r *dashboardRepo) TotalOrderCount(ctx context.Context, merchantID int64) (int64, error) {
 	var n int64
