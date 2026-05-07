@@ -38,7 +38,8 @@ export default function MerchantSettings() {
   const [loading, setLoading] = useState(false)
   const [passwordLoading, setPasswordLoading] = useState(false)
   const [profile, setProfile] = useState<MerchantProfile | null>(null)
-  const [newSecret, setNewSecret] = useState<string | null>(null)
+  const [secretOpen, setSecretOpen] = useState(false)
+  const [secret, setSecret] = useState<{ app_id: string; app_secret: string } | null>(null)
   const [profileForm] = Form.useForm()
   const [passwordForm] = Form.useForm()
 
@@ -87,7 +88,17 @@ export default function MerchantSettings() {
     }
   }
 
-  const resetSecret = () => {
+  const openSecret = async () => {
+    try {
+      const res = await merchantApi.getSecret()
+      setSecret(res)
+      setSecretOpen(true)
+    } catch (e: any) {
+      message.error(e.response?.data?.msg || '获取失败')
+    }
+  }
+
+  const doResetSecret = () => {
     Modal.confirm({
       title: '重置应用密钥',
       icon: <ExclamationCircleOutlined />,
@@ -99,7 +110,7 @@ export default function MerchantSettings() {
       onOk: async () => {
         try {
           const res = await merchantApi.resetSecret()
-          setNewSecret(res.app_secret)
+          setSecret(res)
           message.success('密钥已重置')
         } catch (e: any) {
           message.error(e.response?.data?.msg || '重置失败')
@@ -127,24 +138,42 @@ export default function MerchantSettings() {
       <section className="ep-panel ep-settings-panel">
         <div className="ep-settings-head">
           <h3>API 签名凭证</h3>
-          <Button size="small" danger onClick={resetSecret}>重置密钥</Button>
+          <Button size="small" onClick={openSecret}>查看密钥</Button>
         </div>
         <div className="ep-readonly-list">
           <ReadonlyField label="App ID" value={profile?.app_id} />
         </div>
-        {newSecret ? (
-          <div style={{ marginTop: 12, padding: '12px 16px', background: 'var(--bg-deep)', borderRadius: 6, border: '1px solid var(--accent-gold-dim)' }}>
-            <div style={{ fontSize: 11, color: 'var(--accent-gold)', marginBottom: 6, fontWeight: 600 }}>
-              新密钥（仅显示一次，请立即保存）
+        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-faint)' }}>
+          点击「查看密钥」获取 API 对接所需的 app_id 和 app_secret
+        </div>
+      </section>
+
+      <Modal
+        title="API 签名凭证"
+        open={secretOpen}
+        onCancel={() => setSecretOpen(false)}
+        centered
+        footer={[
+          <Button key="reset" danger onClick={doResetSecret}>重置密钥</Button>,
+          <Button key="close" type="primary" onClick={() => setSecretOpen(false)}>关闭</Button>,
+        ]}
+      >
+        {secret && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 6 }}>App ID</div>
+              <Text code copyable style={{ fontSize: 13, wordBreak: 'break-all' }}>{secret.app_id}</Text>
             </div>
-            <Text code copyable style={{ fontSize: 12, wordBreak: 'break-all' }}>{newSecret}</Text>
-          </div>
-        ) : (
-          <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-faint)' }}>
-            密钥仅在创建或重置时显示一次。如需查看请点击「重置密钥」。
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 6 }}>App Secret</div>
+              <Text code copyable style={{ fontSize: 13, wordBreak: 'break-all' }}>{secret.app_secret}</Text>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-faint)', padding: '8px 12px', background: 'var(--bg-deep)', borderRadius: 4 }}>
+              请妥善保管密钥，勿泄露给第三方。重置后旧密钥立即失效。
+            </div>
           </div>
         )}
-      </section>
+      </Modal>
 
       <section className="ep-panel ep-settings-panel">
         <div className="ep-settings-head">

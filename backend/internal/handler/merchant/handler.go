@@ -148,6 +148,23 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": "OK"})
 }
 
+func (h *Handler) GetSecret(c *gin.Context) {
+	id, err := auth.CurrentUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"code": "AUTH_FAILED"})
+		return
+	}
+	m, err := h.merchants.GetByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"code": "AUTH_FAILED"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": "OK", "data": gin.H{
+		"app_id":     m.AppID,
+		"app_secret": m.AppSecret,
+	}})
+}
+
 func (h *Handler) ResetSecret(c *gin.Context) {
 	id, err := auth.CurrentUserID(c)
 	if err != nil {
