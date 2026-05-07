@@ -156,6 +156,7 @@ POST /api/v1/pay/create
 | `trade_type` | string | 是 | 交易类型：`native`（扫码） / `h5`（H5跳转） |
 | `subject` | string | 是 | 商品描述 |
 | `amount` | int64 | 是 | 金额，单位：**分**（最小值 1） |
+| `notify_url` | string | 否 | 本订单异步通知地址；不传则使用商户配置的通知地址 |
 | `expire_seconds` | int | 否 | 过期时间（秒），默认 900 |
 | `currency` | string | 否 | 币种，默认 `CNY` |
 | `extra` | object | 否 | 额外参数（渠道特殊参数） |
@@ -169,6 +170,7 @@ POST /api/v1/pay/create
   "trade_type": "native",
   "subject": "Premium会员月卡",
   "amount": 2990,
+  "notify_url": "https://merchant.example.com/pay/notify",
   "expire_seconds": 600
 }
 ```
@@ -298,7 +300,7 @@ POST /api/v1/pay/refund
 
 ## 异步通知
 
-支付成功后，平台会向商户注册的 `notify_url` 发送 **签名的 POST 请求**。
+支付成功后，平台会向订单创建时传入的 `notify_url` 发送 **签名的 POST 请求**；订单未传时使用商户注册的 `notify_url`。
 
 ### 通知格式
 

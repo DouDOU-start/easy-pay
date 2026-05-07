@@ -107,6 +107,7 @@ type Order struct {
 	Currency        string      `gorm:"size:8" json:"currency"`
 	Status          OrderStatus `gorm:"size:16;index" json:"status"`
 	ClientIP        string      `gorm:"column:client_ip;size:64" json:"client_ip"`
+	NotifyURL       string      `gorm:"column:notify_url;size:512" json:"notify_url"`
 	Extra           string      `gorm:"type:jsonb" json:"extra"`
 	CodeURL         string      `gorm:"column:code_url;size:512" json:"code_url"`
 	H5URL           string      `gorm:"column:h5_url;size:512" json:"h5_url"`
@@ -156,7 +157,6 @@ type NotifyLog struct {
 }
 
 func (NotifyLog) TableName() string { return "notify_logs" }
-
 
 type SettlementStatus string
 

@@ -25,7 +25,7 @@ var (
 )
 
 type Notifier interface {
-	Enqueue(ctx context.Context, merchantID int64, orderNo, eventType string, payload any) error
+	Enqueue(ctx context.Context, merchantID int64, orderNo, eventType, notifyURL string, payload any) error
 }
 
 type PlatformBaseGetter func(ctx context.Context) string
@@ -69,6 +69,7 @@ type CreateOrderInput struct {
 	Amount          int64
 	Currency        string
 	ClientIP        string
+	NotifyURL       string
 	Extra           map[string]any
 	ExpireSeconds   int
 }
@@ -126,6 +127,7 @@ func (s *Service) CreateOrder(ctx context.Context, in CreateOrderInput) (*Create
 		Currency:        in.Currency,
 		Status:          model.OrderPending,
 		ClientIP:        in.ClientIP,
+		NotifyURL:       in.NotifyURL,
 		Extra:           string(extraJSON),
 		ExpireAt:        expireAt,
 	}
@@ -350,7 +352,7 @@ func (s *Service) HandlePaymentNotify(ctx context.Context, ev *channel.NotifyEve
 		"status":            string(model.OrderPaid),
 		"paid_at":           paidAt.Format(time.RFC3339),
 	}
-	return s.notifier.Enqueue(ctx, o.MerchantID, o.OrderNo, string(channel.EventPaymentSuccess), payload)
+	return s.notifier.Enqueue(ctx, o.MerchantID, o.OrderNo, string(channel.EventPaymentSuccess), o.NotifyURL, payload)
 }
 
 func (s *Service) HandleRefundNotify(ctx context.Context, ev *channel.RefundNotifyEvent) error {

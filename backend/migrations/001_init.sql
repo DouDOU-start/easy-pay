@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS orders (
     currency           VARCHAR(8)   NOT NULL DEFAULT 'CNY',
     status             VARCHAR(16)  NOT NULL, -- pending | paid | closed | refunded | partial_refunded | failed
     client_ip          VARCHAR(64)  NOT NULL DEFAULT '',
+    notify_url         VARCHAR(512) NOT NULL DEFAULT '',
     extra              JSONB        NOT NULL DEFAULT '{}'::jsonb,
     code_url           VARCHAR(512) NOT NULL DEFAULT '', -- QR code url for native
     h5_url             VARCHAR(512) NOT NULL DEFAULT '',

@@ -22,14 +22,15 @@ func NewPaymentHandler(svc *payment.Service, log *zap.Logger) *PaymentHandler {
 }
 
 type createOrderReq struct {
-	MerchantOrderNo string         `json:"merchant_order_no" binding:"required,max=64"`
-	Channel         model.Channel  `json:"channel" binding:"required,oneof=wechat alipay"`
+	MerchantOrderNo string          `json:"merchant_order_no" binding:"required,max=64"`
+	Channel         model.Channel   `json:"channel" binding:"required,oneof=wechat alipay"`
 	TradeType       model.TradeType `json:"trade_type" binding:"required,oneof=native h5"`
-	Subject         string         `json:"subject" binding:"required,max=256"`
-	Amount          int64          `json:"amount" binding:"required,min=1"`
-	Currency        string         `json:"currency"`
-	ExpireSeconds   int            `json:"expire_seconds"`
-	Extra           map[string]any `json:"extra"`
+	Subject         string          `json:"subject" binding:"required,max=256"`
+	Amount          int64           `json:"amount" binding:"required,min=1"`
+	Currency        string          `json:"currency"`
+	NotifyURL       string          `json:"notify_url" binding:"omitempty,url,max=512"`
+	ExpireSeconds   int             `json:"expire_seconds"`
+	Extra           map[string]any  `json:"extra"`
 }
 
 func (h *PaymentHandler) Create(c *gin.Context) {
@@ -54,6 +55,7 @@ func (h *PaymentHandler) Create(c *gin.Context) {
 		Amount:          req.Amount,
 		Currency:        req.Currency,
 		ClientIP:        c.ClientIP(),
+		NotifyURL:       req.NotifyURL,
 		Extra:           req.Extra,
 		ExpireSeconds:   req.ExpireSeconds,
 	})

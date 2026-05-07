@@ -64,13 +64,16 @@ func New(
 }
 
 // Enqueue persists a new pending notify_log row and hands its ID to a worker.
-func (s *Service) Enqueue(ctx context.Context, merchantID int64, orderNo, eventType string, payload any) error {
+func (s *Service) Enqueue(ctx context.Context, merchantID int64, orderNo, eventType, notifyURL string, payload any) error {
 	m, err := s.merchant.GetByID(ctx, merchantID)
 	if err != nil {
 		return err
 	}
-	if m.NotifyURL == "" {
-		s.log.Warn("merchant has no notify_url, dropping",
+	if notifyURL == "" {
+		notifyURL = m.NotifyURL
+	}
+	if notifyURL == "" {
+		s.log.Warn("notify_url is empty, dropping",
 			zap.Int64("merchant_id", merchantID),
 			zap.String("order_no", orderNo))
 		return nil
@@ -79,13 +82,13 @@ func (s *Service) Enqueue(ctx context.Context, merchantID int64, orderNo, eventT
 	body, _ := json.Marshal(payload)
 	now := time.Now()
 	entry := &model.NotifyLog{
-		MerchantID:   merchantID,
-		OrderNo:      orderNo,
-		EventType:    eventType,
-		NotifyURL:    m.NotifyURL,
-		RequestBody:  string(body),
-		Status:       model.NotifyPending,
-		NextRetryAt:  &now,
+		MerchantID:  merchantID,
+		OrderNo:     orderNo,
+		EventType:   eventType,
+		NotifyURL:   notifyURL,
+		RequestBody: string(body),
+		Status:      model.NotifyPending,
+		NextRetryAt: &now,
 	}
 	if err := s.logs.Create(ctx, entry); err != nil {
 		return err
