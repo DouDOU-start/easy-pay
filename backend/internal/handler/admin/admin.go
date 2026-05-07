@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -938,7 +939,7 @@ func (h *Handler) CreateSettlement(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "INSUFFICIENT", "msg": "该周期内无可结算余额"})
 		return
 	}
-	fee := int64(float64(amount) * req.FeeRate)
+	fee := int64(math.Round(float64(amount) * req.FeeRate))
 	netAmount := amount - fee
 	s := &model.Settlement{
 		SettlementNo: idgen.OrderNo("ST"),
